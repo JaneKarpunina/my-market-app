@@ -18,7 +18,7 @@ public class AddItemController {
     }
 
     @GetMapping("/add-item")
-    public String showProducts() {
+    public String addProducts() {
         return "addItem";
     }
 

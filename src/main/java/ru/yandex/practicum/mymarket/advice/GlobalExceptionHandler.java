@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import ru.yandex.practicum.mymarket.exception.NumberOutsideOfRangeException;
+import ru.yandex.practicum.mymarket.exception.ProductNotFoundException;
 import ru.yandex.practicum.mymarket.exception.UnsupportedMediaTypeException;
 
 @ControllerAdvice
@@ -16,5 +17,10 @@ public class GlobalExceptionHandler {
     public String handleExceptionProductUpload(RuntimeException ex, Model model) {
         model.addAttribute("errorMessage", ex.getMessage());
         return "addItem";
+    }
+
+    @ExceptionHandler({ProductNotFoundException.class})
+    public String handleProductNotFoundException(RuntimeException ex) {
+        return "items";
     }
 }

@@ -20,7 +20,7 @@ import java.util.UUID;
 public class AddItemService {
 
 
-    private static final String IMAGES_DIR = "/images";
+    private static final String IMAGES_DIR = "uploads/";
 
     private final ProductRepository productRepository;
 
@@ -55,7 +55,7 @@ public class AddItemService {
         product.setTitle(title);
         product.setDescription(description);
         product.setPrice(finalPrice);
-        product.setImgPath(filePath.toString());
+        product.setImgPath(filename);
 
         productRepository.save(product);
     }

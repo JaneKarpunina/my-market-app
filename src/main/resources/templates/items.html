@@ -38,12 +38,12 @@
                     </div>
                     <div class="form-floating w-25">
                         <select class="form-select" id="pageSize" name="pageSize" onchange="document.getElementById('main').submit()" form="main">
-                            <option value="2" th:selected="${paging.pageSize()==2}">2</option>
-                            <option value="5" th:selected="${paging.pageSize()==5}">5</option>
-                            <option value="10" th:selected="${paging.pageSize()==10}">10</option>
-                            <option value="20" th:selected="${paging.pageSize()==20}">20</option>
-                            <option value="50" th:selected="${paging.pageSize()==50}">50</option>
-                            <option value="100" th:selected="${paging.pageSize()==100}">100</option>
+                            <option value="2" th:selected="${paging.pageSize==2}">2</option>
+                            <option value="5" th:selected="${paging.pageSize==5}">5</option>
+                            <option value="10" th:selected="${paging.pageSize==10}">10</option>
+                            <option value="20" th:selected="${paging.pageSize==20}">20</option>
+                            <option value="50" th:selected="${paging.pageSize==50}">50</option>
+                            <option value="100" th:selected="${paging.pageSize==100}">100</option>
                         </select>
                         <label for="pageSize">На странице</label>
                     </div>
@@ -52,40 +52,40 @@
         </div>
         <div class="row p-2" th:each="itemsRow : ${items}">
             <div class="col" th:each="item : ${itemsRow}">
-                <div class="card" th:if="${item.id() != -1}">
-                    <a th:href="${'/items/'+item.id()}">
-                        <img th:src="${'/'+item.imgPath()}" class="card-img-top" alt="Нет изображения">
+                <div class="card" th:if="${item.id != -1}">
+                    <a th:href="${'/items/'+item.id}">
+                        <img th:src="${'/uploads/' + item.imgPath}" class="card-img-top" alt="Нет изображения">
                     </a>
                     <div class="card-body">
-                        <h5 class="card-title" th:text="${item.title()}"></h5>
+                        <h5 class="card-title" th:text="${item.title}"></h5>
                         <h5>
-                            <span class="badge text-bg-success justify-content-end" th:text="${item.price()}+' руб.'"></span>
+                            <span class="badge text-bg-success justify-content-end" th:text="${item.price}+' руб.'"></span>
                         </h5>
-                        <p class="card-text" th:text="${item.description()}"></p>
+                        <p class="card-text" th:text="${item.description}"></p>
                         <form method="post" th:action="@{/items}">
                             <div class="hstack gap-3">
-                                <input type="hidden" name="id" th:value="${item.id()}">
+                                <input type="hidden" name="id" th:value="${item.id}">
                                 <input type="hidden" name="search" th:value="${search}">
                                 <input type="hidden" name="sort" th:value="${sort}">
-                                <input type="hidden" name="pageSize" th:value="${paging.pageSize()}">
-                                <input type="hidden" name="pageNumber" th:value="${paging.pageNumber()}">
+                                <input type="hidden" name="pageSize" th:value="${paging.pageSize}">
+                                <input type="hidden" name="pageNumber" th:value="${paging.pageNumber}">
                                 <button type="submit" class="btn btn-outline-secondary" name="action" value="MINUS">-</button>
-                                <span th:text="${item.count()}"></span>
+                                <span th:text="${item.count}"></span>
                                 <button type="submit" class="btn btn-outline-secondary" name="action" value="PLUS">+</button>
-                                <button type="submit" class="btn btn-warning ms-auto bi bi-cart4" name="action" value="PLUS" th:if="${item.count()==0}"></button>
+                                <button type="submit" class="btn btn-warning ms-auto bi bi-cart4" name="action" value="PLUS" th:if="${item.count==0}"></button>
                             </div>
                         </form>
                     </div>
                 </div>
-                <div th:unless="${item.id() != -1}">&nbsp;</div>
+                <div th:unless="${item.id != -1}">&nbsp;</div>
             </div>
         </div>
         <div class="row p-2">
             <div class="col">
                 <div class="hstack gap-3 justify-content-center">
-                    <button type="submit" class="btn btn-light" th:if="${paging.hasPrevious()}" name="pageNumber" th:value="${paging.pageNumber()-1}" form="main">&larr;</button>
-                    <span th:text="${'Страница: '+paging.pageNumber()}"></span>
-                    <button type="submit" class="btn btn-light" th:if="${paging.hasNext()}" name="pageNumber" th:value="${paging.pageNumber()+1}" form="main">&rarr;</button>
+                    <button type="submit" class="btn btn-light" th:if="${paging.hasPrevious}" name="pageNumber" th:value="${paging.pageNumber-1}" form="main">&larr;</button>
+                    <span th:text="${'Страница: '+paging.pageNumber}"></span>
+                    <button type="submit" class="btn btn-light" th:if="${paging.hasNext}" name="pageNumber" th:value="${paging.pageNumber+1}" form="main">&rarr;</button>
                 </div>
             </div>
         </div>
