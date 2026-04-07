@@ -25,19 +25,19 @@
         <div class="row p-2">
             <div class="col">
                 <div class="card">
-                    <img class="p-2" th:src="${'/'+item.imgPath()}" alt="Нет изображения" width="300" height="300">
+                    <img class="p-2" th:src="${'/uploads/'+item.imgPath}" alt="Нет изображения" width="300" height="300">
                     <div class="card-body">
-                        <h5 class="card-title" th:text="${item.title()}"></h5>
+                        <h5 class="card-title" th:text="${item.title}"></h5>
                         <h5>
-                            <span class="badge text-bg-success justify-content-end" th:text="${item.price()}+' руб.'"></span>
+                            <span class="badge text-bg-success justify-content-end" th:text="${item.price}+' руб.'"></span>
                         </h5>
-                        <p class="card-text" th:text="${item.description()}"></p>
-                        <form th:action="@{${'/items/'+item.id()}}" method="post">
+                        <p class="card-text" th:text="${item.description}"></p>
+                        <form th:action="@{${'/items/'+item.id}}" method="post">
                             <div class="hstack gap-3">
                                 <button type="submit" class="btn btn-outline-secondary" name="action" value="MINUS">-</button>
-                                <span th:text="${item.count()}"></span>
+                                <span th:text="${item.count}"></span>
                                 <button type="submit" class="btn btn-outline-secondary" name="action" value="PLUS">+</button>
-                                <button type="submit" class="btn btn-warning ms-auto bi bi-cart4" name="action" value="PLUS" th:if="${item.count()==0}"></button>
+                                <button type="submit" class="btn btn-warning ms-auto bi bi-cart4" name="action" value="PLUS" th:if="${item.count==0}"></button>
                             </div>
                         </form>
                     </div>

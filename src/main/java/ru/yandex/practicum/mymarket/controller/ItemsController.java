@@ -5,6 +5,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
+import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.service.ItemsService;
 
 @Controller
@@ -41,8 +42,29 @@ public class ItemsController {
     }
 
     @GetMapping("/{id}")
-    public String getItem(@RequestParam("id") Long id, Model model) {
-        return "";
+    public String getItem(@PathVariable Long id,
+                          @CookieValue(value = "cartId", required = false) String cartId,
+                          Model model) {
+
+        ItemDto item  = itemsService.getItemWithQuantity(id, cartId);
+
+        model.addAttribute("item", item);
+        return "item";
+    }
+
+    @PostMapping("/{id}")
+    public String changeItemQuantity(@PathVariable Long id,
+                                     @CookieValue(value = "cartId", required = false) String cartId,
+                                     @RequestParam("action") String action,
+                                     HttpServletResponse response,
+                                     Model model) {
+
+        itemsService.changeItemsCount(id, action, response, cartId);
+        ItemDto item  = itemsService.getItemWithQuantity(id, cartId);
+
+        model.addAttribute("item", item);
+
+        return "item";
     }
 }
 

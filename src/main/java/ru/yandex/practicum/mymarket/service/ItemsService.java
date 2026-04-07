@@ -85,10 +85,10 @@ public class ItemsService {
 
         List<ItemDto> items;
         if (cartId != null) {
-            items = productRepository.findProductWithQuantity(search, cartId);
+            items = productRepository.findProductsWithQuantity(search, cartId);
         }
         else {
-            items = productRepository.findProductWithZeroCartId(search);
+            items = productRepository.findProductsWithZeroCartId(search);
         }
 
         switch (sort) {
@@ -107,11 +107,7 @@ public class ItemsService {
     @Transactional
     public void changeItemsCount(Long id, String action, HttpServletResponse response, String cartId) {
 
-        Product product = productRepository.findById(id).orElse(null);
-
-        if (product == null) {
-            throw new ProductNotFoundException("Не существует товара с id: " + id);
-        }
+        checkItemExists(id);
 
         if ((cartId == null || cartId.isEmpty())) {
 
@@ -152,10 +148,35 @@ public class ItemsService {
             cartItemRepository.delete(cartItem);
         }
         else if (quantity > 1 && MINUS.equals(action)) {
-            cartItemRepository.updateQuantity(id, quantity - 1);
+            cartItemRepository.updateQuantity(cartItem.getId(), quantity - 1);
         }
         else if (quantity < Integer.MAX_VALUE && PLUS.equals(action)) {
-            cartItemRepository.updateQuantity(id, quantity + 1);
+            int i = cartItemRepository.updateQuantity(cartItem.getId(), quantity + 1);
+        }
+    }
+
+    @Transactional
+    public ItemDto getItemWithQuantity(Long id, String cartId) {
+
+        checkItemExists(id);
+
+        return getItemDto(id, cartId);
+    }
+
+    private ItemDto getItemDto(Long id, String cartId) {
+        if (cartId == null || cartId.isEmpty()) {
+            return productRepository.findProductWithZeroCartId(id).orElse(new ItemDto());
+        }
+        else {
+            return productRepository.findProductWithQuantity(id, cartId).orElse(new ItemDto());
+        }
+    }
+
+    private void checkItemExists(Long id) {
+        Product product = productRepository.findById(id).orElse(null);
+
+        if (product == null) {
+            throw new ProductNotFoundException("Не существует товара с id: " + id);
         }
     }
 }

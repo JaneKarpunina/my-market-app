@@ -25,7 +25,7 @@ public class AllItemsController {
                            @CookieValue(value = "cartId", required = false) String cartId,
                            Model model) {
 
-        ItemsWithPaging itemsWithPaging= itemsService.getItemsWithPaging(search, sort, pageNumber, pageSize, cartId);
+;        ItemsWithPaging itemsWithPaging= itemsService.getItemsWithPaging(search, sort, pageNumber, pageSize, cartId);
 
         model.addAttribute("items", itemsWithPaging.getItems());
         model.addAttribute("search", search);
