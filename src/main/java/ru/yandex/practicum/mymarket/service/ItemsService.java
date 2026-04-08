@@ -119,13 +119,18 @@ public class ItemsService {
                 cookie.setHttpOnly(true);
                 response.addCookie(cookie);
 
-                Cart cart = new Cart();
-                cart.setId(cartId);
-
-                cartRepository.save(cart);
-                cartItemRepository.insertCartItem(cartId, id, 1); //создается новый элемент
+                createCartAndItem(id, cartId);
             }
             return;
+        }
+        else {
+            Cart savedCart = cartRepository.findById(cartId).orElse(null);
+            if (savedCart == null) {
+                if (PLUS.equals(action)) {
+                    createCartAndItem(id, cartId);
+                }
+                return;
+            }
         }
 
         setCartItem(id, action, cartId);
@@ -133,7 +138,16 @@ public class ItemsService {
 
     }
 
+    private void createCartAndItem(Long id, String cartId) {
+        Cart cart = new Cart();
+        cart.setId(cartId);
+
+        cartRepository.save(cart);
+        cartItemRepository.insertCartItem(cartId, id, 1); //создается новый элемент
+    }
+
     private void setCartItem(Long id, String action, String cartId) {
+
         CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cartId, id).orElse(null);
 
         if (cartItem == null) {
@@ -151,7 +165,7 @@ public class ItemsService {
             cartItemRepository.updateQuantity(cartItem.getId(), quantity - 1);
         }
         else if (quantity < Integer.MAX_VALUE && PLUS.equals(action)) {
-            int i = cartItemRepository.updateQuantity(cartItem.getId(), quantity + 1);
+            cartItemRepository.updateQuantity(cartItem.getId(), quantity + 1);
         }
     }
 
