@@ -7,16 +7,16 @@
     <changeSet id="create_order_table" author="author">
         <preConditions>
             <not>
-                <tableExists tableName="order"/>
+                <tableExists tableName="orders"/>
             </not>
         </preConditions>
-        <createTable tableName="order">
+        <createTable tableName="orders">
             <column name="id" type="bigint" autoIncrement="true">
                 <constraints primaryKey="true"/>
             </column>
         </createTable>
         <rollback>
-            <dropTable tableName="order"/>
+            <dropTable tableName="orders"/>
         </rollback>
     </changeSet>
 </databaseChangeLog>
