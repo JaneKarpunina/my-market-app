@@ -61,21 +61,24 @@ public class AddItemService {
     }
 
     private Long convertPrice(String price) {
+        try {
             BigInteger value = new BigInteger(price);
             long finalPrice;
 
             if (value.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) > 0) {
                 throw new NumberOutsideOfRangeException("Слишком большая цена");
-            }
-            else if (value.compareTo(BigInteger.ZERO) < 0) {
+            } else if (value.compareTo(BigInteger.ZERO) < 0) {
                 throw new NumberOutsideOfRangeException("Цена отрицательная");
-            }
-            else {
+            } else {
                 finalPrice = value.longValue();
             }
 
 
             return finalPrice;
+        }
+        catch(NumberFormatException ex) {
+            throw new IllegalArgumentException("Некорректный формат цены: " + price);
+        }
     }
 
     private static void checkFile(MultipartFile image) throws IOException {

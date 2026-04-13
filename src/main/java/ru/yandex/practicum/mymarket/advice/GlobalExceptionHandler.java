@@ -13,7 +13,7 @@ import ru.yandex.practicum.mymarket.exception.UnsupportedMediaTypeException;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler({MaxUploadSizeExceededException.class, NumberOutsideOfRangeException.class,
-            UnsupportedMediaTypeException.class})
+            UnsupportedMediaTypeException.class, IllegalArgumentException.class})
     public String handleExceptionProductUpload(RuntimeException ex, Model model) {
         model.addAttribute("errorMessage", ex.getMessage());
         return "addItem";
