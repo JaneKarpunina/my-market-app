@@ -2,6 +2,7 @@ package ru.yandex.practicum.mymarket.service;
 
 import org.apache.tika.Tika;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import ru.yandex.practicum.mymarket.entity.Product;
 import ru.yandex.practicum.mymarket.exception.NumberOutsideOfRangeException;
@@ -28,6 +29,7 @@ public class AddItemService {
         this.productRepository = productRepository;
     }
 
+    @Transactional
     public void addItem(String title, String description, String price, MultipartFile imageFile) {
 
         Long finalPrice = convertPrice(price);
