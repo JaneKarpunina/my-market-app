@@ -10,7 +10,6 @@ import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.entity.Cart;
 import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.entity.Product;
-import ru.yandex.practicum.mymarket.exception.ProductNotFoundException;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.CartRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
@@ -107,7 +106,11 @@ public class ItemsService {
     @Transactional
     public void changeItemsCount(Long id, String action, HttpServletResponse response, String cartId) {
 
-        checkItemExists(id);
+        Product product = productRepository.findById(id).orElse(null);
+
+        if (product == null) {
+            return;
+        }
 
         if ((cartId == null || cartId.isEmpty())) {
 
@@ -171,8 +174,11 @@ public class ItemsService {
 
     @Transactional
     public ItemDto getItemWithQuantity(Long id, String cartId) {
+        Product product = productRepository.findById(id).orElse(null);
 
-        checkItemExists(id);
+        if (product == null) {
+            return new ItemDto();
+        }
 
         return getItemDto(id, cartId);
     }
@@ -183,14 +189,6 @@ public class ItemsService {
         }
         else {
             return productRepository.findProductWithQuantity(id, cartId).orElse(new ItemDto());
-        }
-    }
-
-    private void checkItemExists(Long id) {
-        Product product = productRepository.findById(id).orElse(null);
-
-        if (product == null) {
-            throw new ProductNotFoundException("Не существует товара с id: " + id);
         }
     }
 }

@@ -1,18 +1,19 @@
 package ru.yandex.practicum.mymarket.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@Data
+@Getter
+@Setter
 @Entity
 @Table(name = "cart")
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString(exclude = "items")
+@EqualsAndHashCode(exclude = "items")
 public class Cart {
 
     @Id

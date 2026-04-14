@@ -12,7 +12,6 @@ import ru.yandex.practicum.mymarket.dto.ItemsWithPaging;
 import ru.yandex.practicum.mymarket.entity.Cart;
 import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.entity.Product;
-import ru.yandex.practicum.mymarket.exception.ProductNotFoundException;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
 import java.util.ArrayList;
@@ -178,8 +177,9 @@ public class ItemsServiceTest extends BaseTest {
     void test_changeItemsCount_noProduct() {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        assertThrows(ProductNotFoundException.class, () ->
-                itemsService.changeItemsCount(ITEM_ID, PLUS, response, null));
+        itemsService.changeItemsCount(ITEM_ID, PLUS, response, null);
+
+        verify(cartRepository, never()).save(any());
 
     }
 
@@ -272,9 +272,7 @@ public class ItemsServiceTest extends BaseTest {
     void test_getItemWithQuantity_ShouldThrowException_WhenProductDoesNotExist() {
         when(productRepository.findById(ITEM_ID)).thenReturn(Optional.empty());
 
-        assertThrows(ProductNotFoundException.class, () ->
-                itemsService.getItemWithQuantity(ITEM_ID, CART_ID)
-        );
+        itemsService.getItemWithQuantity(ITEM_ID, CART_ID);
 
         verify(productRepository, never()).findProductWithQuantity(any(), any());
     }

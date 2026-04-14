@@ -1,15 +1,16 @@
 package ru.yandex.practicum.mymarket.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
-@Data
+@Getter
+@Setter
 @Entity
 @Table(name = "cart_item")
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString(exclude = "cart")
+@EqualsAndHashCode(exclude = "cart")
 public class CartItem {
 
     @Id
