@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Добавить товар</title>
+</head>
+<body>
+<h1>Добавить новый товар</h1>
+
+<div th:if="${errorMessage}" style="color:red;">
+    <p th:text="${errorMessage}"></p>
+</div>
+<div th:if="${successMessage}"
+     style="color: green; padding: 10px; border: 1px solid green;">
+    <p th:text="${successMessage}"></p>
+</div>
+<!-- Форма для добавления нового продукта -->
+<form th:action="@{/item/add}" method="post" enctype="multipart/form-data">
+
+    <!-- Название товара -->
+    <label for="title">Название:</label>
+    <input type="text" id="title" name="title" required maxlength="255">
+    <br/><br/>
+
+    <!-- Описание -->
+    <label for="description">Описание:</label>
+    <textarea id="description" name="description" rows="4" cols="50" required maxlength="500"></textarea>
+    <br/><br/>
+
+    <!-- Цена -->
+    <label for="price">Цена:</label>
+    <input type="text" id="price" name="price" required>
+    <br/><br/>
+
+    <!-- Загрузка картинки -->
+    <label for="image">Картинка:</label>
+    <input type="file" id="image" name="image" accept="image/*" required>
+    <br/><br/>
+
+    <!-- Кнопка отправки -->
+    <button type="submit">Добавить товар</button>
+</form>
+</body>
+</html>
