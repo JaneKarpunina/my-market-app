@@ -1,46 +1,59 @@
 package ru.yandex.practicum.mymarket.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.entity.Product;
 
-import java.util.List;
-import java.util.Optional;
-
 @Repository
-public interface ProductRepository extends JpaRepository<Product, Long> {
+public interface ProductRepository extends ReactiveCrudRepository<Product, Long> {
 
     @Query("""
-            SELECT new ru.yandex.practicum.mymarket.dto.ItemDto(p.id, p.title, p.description, p.imgPath, p.price,
-            COALESCE(c.quantity, 0))
-            FROM Product p
-            LEFT JOIN CartItem c ON c.product = p AND c.cart.id = :cartId
-            WHERE (:search IS NULL OR p.title LIKE %:search% OR p.description LIKE %:search%)
+                SELECT p.*, COALESCE(ci.quantity, 0) as count
+                FROM product p
+                LEFT JOIN cart_item ci ON p.id = ci.product_id AND ci.cart_id = :cartId
+                WHERE p.title ILIKE CONCAT('%', :search, '%') OR description ILIKE CONCAT('%', :search, '%')
+                ORDER BY
+                    CASE WHEN :sort = 'ALPHA' THEN p.title END ASC,
+                    CASE WHEN :sort = 'PRICE' THEN p.price END ASC
+                LIMIT :limit OFFSET :offset
             """)
-    List<ItemDto> findProductsWithQuantity(String search, String cartId);
+    Flux<ItemDto> findProductsWithQuantityPaged(String search, String cartId, String sort, int limit, long offset);
 
+    // С пагинацией без корзины
     @Query("""
-            SELECT new ru.yandex.practicum.mymarket.dto.ItemDto(p.id, p.title, p.description, p.imgPath, p.price, 0)
-            FROM Product p
-            WHERE (:search IS NULL OR p.title LIKE %:search% OR p.description LIKE %:search%)
+            SELECT *, 0 as quantity FROM product
+            WHERE title ILIKE CONCAT('%', :search, '%') OR description ILIKE CONCAT('%', :search, '%')
+            ORDER BY
+                CASE WHEN :sort = 'ALPHA' THEN title END ASC,
+                CASE WHEN :sort = 'PRICE' THEN price END ASC
+            LIMIT :limit OFFSET :offset
             """)
-    List<ItemDto> findProductsWithZeroCartId(String search);
+    Flux<ItemDto> findProductsWithZeroCartIdPaged(String search, String sort, int limit, long offset);
 
     @Query("""
-            SELECT new ru.yandex.practicum.mymarket.dto.ItemDto(p.id, p.title, p.description, p.imgPath, p.price, 0)
-            FROM Product p
+             SELECT COUNT(*) FROM product
+             WHERE title ILIKE CONCAT('%', :search, '%') OR description ILIKE CONCAT('%', :search, '%')
+            """)
+    Mono<Long> countByTitleAndDescription(String search);
+
+
+    @Query("""
+            SELECT p.*
+            FROM product p
             WHERE p.id = :id
             """)
-    Optional<ItemDto> findProductWithZeroCartId(Long id);
+    Mono<ItemDto> findProductWithZeroCartId(Long id);
 
     @Query("""
-            SELECT new ru.yandex.practicum.mymarket.dto.ItemDto(p.id, p.title, p.description, p.imgPath, p.price,
-            COALESCE(c.quantity, 0))
-            FROM Product p
-            LEFT JOIN CartItem c ON c.product = p AND c.cart.id = :cartId
+            SELECT p.*,
+            COALESCE(c.quantity, 0) as count
+            FROM product p
+            LEFT JOIN cart_item c ON c.product_id = p.id AND c.cart_id = :cartId
             WHERE p.id = :id
             """)
-    Optional<ItemDto> findProductWithQuantity(Long id, String cartId);
+    Mono<ItemDto> findProductWithQuantity(Long id, String cartId);
 }

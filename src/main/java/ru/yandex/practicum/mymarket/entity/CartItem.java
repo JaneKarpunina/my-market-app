@@ -1,30 +1,28 @@
 package ru.yandex.practicum.mymarket.entity;
 
-import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
-@Getter
-@Setter
-@Entity
-@Table(name = "cart_item")
+@Data
+@Table(name = "CART_ITEM")
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = "cart")
-@EqualsAndHashCode(exclude = "cart")
 public class CartItem {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "cart_id", nullable = false)
-    private Cart cart;
+    @Column("CART_ID")
+    private String cartId;
 
-    @ManyToOne
-    @JoinColumn(name = "product_id", nullable = false)
-    private Product product;
+    @Column("PRODUCT_ID")
+    private Long productId;
 
-    @Column(nullable = false)
     private int quantity;
+
+    @Version
+    private Long version;
 }

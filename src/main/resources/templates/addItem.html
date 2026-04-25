@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
+    <meta charset="UTF-8">
     <title>Добавить товар</title>
 </head>
 <body>
@@ -9,9 +10,8 @@
 <div th:if="${errorMessage}" style="color:red;">
     <p th:text="${errorMessage}"></p>
 </div>
-<div th:if="${successMessage}"
-     style="color: green; padding: 10px; border: 1px solid green;">
-    <p th:text="${successMessage}"></p>
+<div th:if="${success == 'true'}" style="color: green; margin-bottom: 20px;">
+    <p>Товар успешно добавлен</p>
 </div>
 <!-- Форма для добавления нового продукта -->
 <form th:action="@{/item/add}" method="post" enctype="multipart/form-data">

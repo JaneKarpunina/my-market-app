@@ -33,43 +33,45 @@ public class CartService {
            return new CartDto(List.of(), 0L);
         }
 
-        Cart savedCart = cartRepository.findById(cartId).orElse(null);
+//        Cart savedCart = cartRepository.findById(cartId).orElse(null);
+//
+//        if (savedCart == null) {
+//            Cart cart = new Cart();
+//            cart.setId(cartId);
+//            cartRepository.save(cart);
+//            return new CartDto(List.of(), 0L);
+//        }
+//
+//        List<ItemDto> itemDtos = cartRepository.findItemsForCartId(cartId);
+//
+//        long total = 0L;
+//        for (ItemDto itemDto : itemDtos) {
+//           total += itemDto.getPrice() * itemDto.getCount();
+//        }
+//        return new CartDto(itemDtos, total);
 
-        if (savedCart == null) {
-            Cart cart = new Cart();
-            cart.setId(cartId);
-            cartRepository.save(cart);
-            return new CartDto(List.of(), 0L);
-        }
-
-        List<ItemDto> itemDtos = cartRepository.findItemsForCartId(cartId);
-
-        long total = 0L;
-        for (ItemDto itemDto : itemDtos) {
-           total += itemDto.getPrice() * itemDto.getCount();
-        }
-        return new CartDto(itemDtos, total);
+        return new CartDto(List.of(), 0L);
     }
 
     @Transactional
     public void changeItemQuantity(Long id, String action, String cartId) {
 
-        CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cartId, id).orElse(null);
-
-        if (cartItem == null) {
-            return;
-        }
-
-        int quantity = cartItem.getQuantity();
-        if (quantity == 1 && MINUS.equals(action) || DELETE.equals(action)) {
-            cartItemRepository.delete(cartItem);
-        }
-        else if (quantity > 1 && MINUS.equals(action)) {
-            cartItemRepository.updateQuantity(cartItem.getId(), quantity - 1);
-        }
-        else if (quantity < Integer.MAX_VALUE && PLUS.equals(action)) {
-            cartItemRepository.updateQuantity(cartItem.getId(), quantity + 1);
-        }
+//        CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cartId, id).orElse(null);
+//
+//        if (cartItem == null) {
+//            return;
+//        }
+//
+//        int quantity = cartItem.getQuantity();
+//        if (quantity == 1 && MINUS.equals(action) || DELETE.equals(action)) {
+//            cartItemRepository.delete(cartItem);
+//        }
+//        else if (quantity > 1 && MINUS.equals(action)) {
+//            cartItemRepository.updateQuantity(cartItem.getId(), quantity - 1);
+//        }
+//        else if (quantity < Integer.MAX_VALUE && PLUS.equals(action)) {
+//            cartItemRepository.updateQuantity(cartItem.getId(), quantity + 1);
+//        }
 
     }
 }

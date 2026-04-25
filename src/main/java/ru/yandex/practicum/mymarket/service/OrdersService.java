@@ -40,15 +40,15 @@ public class OrdersService {
     @Transactional
     public List<OrderDto> getOrders() {
 
-        List<Order> orders = orderRepository.findAllWithItems();
+        //List<Order> orders = orderRepository.findAllWithItems();
 
         List<OrderDto> orderDtos = new ArrayList<>();
 
-        for (Order order : orders) {
-            OrderDto orderDto = getOrderDto(order);
-
-            orderDtos.add(orderDto);
-        }
+//        for (Order order : orders) {
+//            OrderDto orderDto = getOrderDto(order);
+//
+//            orderDtos.add(orderDto);
+//        }
 
 
         return orderDtos;
@@ -57,69 +57,73 @@ public class OrdersService {
     @Transactional
     public OrderDto getOrder(Long id) {
 
-        Order order = orderRepository.getOrder(id).orElse(null);
+//        Order order = orderRepository.getOrder(id).orElse(null);
+//
+//        if (order == null) {
+//            return new OrderDto();
+//        }
+//
+//        return getOrderDto(order);
 
-        if (order == null) {
-            return new OrderDto();
-        }
-
-        return getOrderDto(order);
+        return new OrderDto();
     }
 
-    private OrderDto getOrderDto(Order order) {
-        OrderDto orderDto = new OrderDto();
-
-        orderDto.setId(order.getId());
-
-        long totalSum = 0L;
-
-        List<ItemDto> itemDtos = new ArrayList<>();
-        for (OrderItem item : order.getItems()) {
-
-            ItemDto itemDto = new ItemDto();
-            Product product = item.getProduct();
-
-            itemDto.setId(product.getId());
-            itemDto.setTitle(product.getTitle());
-            itemDto.setPrice(product.getPrice());
-            itemDto.setCount(item.getQuantity());
-
-            itemDtos.add(itemDto);
-
-            totalSum += product.getPrice() * item.getQuantity();
-        }
-
-        orderDto.setItems(itemDtos);
-        orderDto.setTotalSum(totalSum);
-        return orderDto;
-    }
+//    private OrderDto getOrderDto(Order order) {
+//        OrderDto orderDto = new OrderDto();
+//
+//        orderDto.setId(order.getId());
+//
+//        long totalSum = 0L;
+//
+//        List<ItemDto> itemDtos = new ArrayList<>();
+//        for (OrderItem item : order.getItems()) {
+//
+//            ItemDto itemDto = new ItemDto();
+//            Product product = item.getProduct();
+//
+//            itemDto.setId(product.getId());
+//            itemDto.setTitle(product.getTitle());
+//            itemDto.setPrice(product.getPrice());
+//            itemDto.setCount(item.getQuantity());
+//
+//            itemDtos.add(itemDto);
+//
+//            totalSum += product.getPrice() * item.getQuantity();
+//        }
+//
+//        orderDto.setItems(itemDtos);
+//        orderDto.setTotalSum(totalSum);
+//        return orderDto;
+//    }
 
     @Transactional
     public Long saveOrder(String cartId, HttpServletResponse response) {
 
-        List<CartItem> cartItems = cartItemRepository.findByCartId(cartId);
+//        List<CartItem> cartItems = cartItemRepository.findByCartId(cartId);
+//
+//        Order order = new Order();
+//        order = orderRepository.save(order);
+//
+//        List<OrderItem> orderItems = new ArrayList<>();
+//
+//        for (CartItem ci : cartItems) {
+//            OrderItem orderItem = new OrderItem();
+//            orderItem.setProduct(ci.getProduct());
+//            orderItem.setQuantity(ci.getQuantity());
+//            orderItem.setOrder(order);
+//
+//            orderItems.add(orderItem);
+//        }
+//
+//        orderItemRepository.saveAll(orderItems);
+//
+//        cartRepository.deleteById(cartId);
+//
+//        deleteCookie(response);
+//
+//        return order.getId();
 
-        Order order = new Order();
-        order = orderRepository.save(order);
-
-        List<OrderItem> orderItems = new ArrayList<>();
-
-        for (CartItem ci : cartItems) {
-            OrderItem orderItem = new OrderItem();
-            orderItem.setProduct(ci.getProduct());
-            orderItem.setQuantity(ci.getQuantity());
-            orderItem.setOrder(order);
-
-            orderItems.add(orderItem);
-        }
-
-        orderItemRepository.saveAll(orderItems);
-
-        cartRepository.deleteById(cartId);
-
-        deleteCookie(response);
-
-        return order.getId();
+        return 0L;
     }
 
     private void deleteCookie(HttpServletResponse response) {
