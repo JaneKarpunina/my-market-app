@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.reactive.result.view.Rendering;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.OrderDto;
 import ru.yandex.practicum.mymarket.service.OrdersService;
 
@@ -23,14 +25,12 @@ public class OrdersController {
     }
 
     @GetMapping
-    public String getOrders(Model model) {
-
-       List<OrderDto> orders = ordersService.getOrders();
-
-       model.addAttribute("orders", orders);
-
-       return "orders";
-
+    public Mono<Rendering> getOrders() {
+        return ordersService.getOrders()
+                .collectList()
+                .map(orders -> Rendering.view("orders")
+                        .modelAttribute("orders", orders)
+                        .build());
     }
 
     @GetMapping("/{id}")

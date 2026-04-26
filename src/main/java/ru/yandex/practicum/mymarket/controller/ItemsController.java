@@ -22,29 +22,6 @@ public class ItemsController {
         this.itemsService = itemsService;
     }
 
-//    @PostMapping
-//    public String changeItemQuantity(
-//            @RequestParam("id") Long id,
-//            @RequestParam(value = "search", required = false, defaultValue = "") String search,
-//            @RequestParam(value = "sort", required = false, defaultValue = "NO") String sort,
-//            @RequestParam(value = "pageNumber", required = false, defaultValue = "1") int pageNumber,
-//            @RequestParam(value = "pageSize", required = false, defaultValue = "5") int pageSize,
-//            @RequestParam("action") String action,
-//            HttpServletResponse response,
-//            @CookieValue(value = "cartId", required = false) String cartId) {
-//
-//        itemsService.changeItemsCount(id, action, response, cartId);
-//
-//        String url = UriComponentsBuilder.fromPath("/items")
-//                .queryParam("search", search)
-//                .queryParam("sort", sort)
-//                .queryParam("pageNumber", pageNumber)
-//                .queryParam("pageSize", pageSize)
-//                .toUriString();
-//
-//        return "redirect:" + url;
-//    }
-
     @PostMapping
     public Mono<String> changeItemQuantity(
             ItemChangeRequest request,

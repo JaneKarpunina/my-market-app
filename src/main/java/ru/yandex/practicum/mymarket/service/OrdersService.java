@@ -4,8 +4,10 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.dto.OrderDto;
+import ru.yandex.practicum.mymarket.dto.OrderFlatRow;
 import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.entity.Order;
 import ru.yandex.practicum.mymarket.entity.OrderItem;
@@ -38,20 +40,34 @@ public class OrdersService {
     }
 
     @Transactional
-    public List<OrderDto> getOrders() {
+    public Flux<OrderDto> getOrders() {
 
-        //List<Order> orders = orderRepository.findAllWithItems();
+        return orderRepository.findAllOrdersWithItems()
+                .groupBy(OrderFlatRow::getOrderId)
+                .flatMap(groupedFlux -> groupedFlux
+                        .collectList()
+                        .map(rows -> {
+                            Long orderId = groupedFlux.key();
 
-        List<OrderDto> orderDtos = new ArrayList<>();
+                            List<ItemDto> items = rows.stream()
+                                    .map(row -> {
+                                        ItemDto item = new ItemDto();
+                                        item.setId(row.getProductId());
+                                        item.setTitle(row.getTitle());
+                                        item.setCount(row.getQuantity());
+                                        item.setPrice(row.getPrice());
+                                        return new ItemDto();
+                                    })
+                                    .toList();
 
-//        for (Order order : orders) {
-//            OrderDto orderDto = getOrderDto(order);
-//
-//            orderDtos.add(orderDto);
-//        }
+                            // Считаем сумму
+                            long total = items.stream()
+                                    .mapToLong(i -> i.getPrice() * i.getCount())
+                                    .sum();
 
-
-        return orderDtos;
+                            return new OrderDto(orderId, items, total);
+                        })
+                );
     }
 
     @Transactional
