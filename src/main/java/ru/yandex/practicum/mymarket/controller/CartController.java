@@ -3,7 +3,10 @@ package ru.yandex.practicum.mymarket.controller;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.reactive.result.view.Rendering;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.CartDto;
+import ru.yandex.practicum.mymarket.dto.ItemChangeRequest;
 import ru.yandex.practicum.mymarket.service.CartService;
 
 @Controller
@@ -17,30 +20,33 @@ public class CartController {
     }
 
     @GetMapping
-    public String getCart(@CookieValue(value = "cartId", required = false) String cartId,
-                          Model model) {
+    public Mono<String> getCart(@CookieValue(value = "cartId", required = false) String cartId,
+                                Model model) {
 
-        CartDto cartDto = cartService.getCartDto(cartId);
+        return cartService.getCartDto(cartId)
+                        .flatMap(cartDto ->{
+                            model.addAttribute("items", cartDto.getItems());
+                            model.addAttribute("total", cartDto.getTotal());
+                            return Mono.just("cart");
+                        });
 
-        model.addAttribute("items", cartDto.getItems());
-        model.addAttribute("total", cartDto.getTotal());
-        return "cart";
+
+
 
     }
 
     @PostMapping
-    public String changeItemQuantity(
-            @RequestParam("id") Long id,
-            @RequestParam("action") String action,
-            @CookieValue(value = "cartId", required = false) String cartId,
-            Model model) {
+    public Mono<Rendering> changeItemQuantity(
+            ItemChangeRequest itemChangeRequest,
+            @CookieValue(value = "cartId", required = false) String cartId)
+             {
 
-
-        cartService.changeItemQuantity(id, action, cartId);
-        CartDto cartDto = cartService.getCartDto(cartId);
-
-        model.addAttribute("items", cartDto.getItems());
-        model.addAttribute("total", cartDto.getTotal());
-        return "cart";
+        return cartService.changeItemQuantity(itemChangeRequest.getId(),
+                itemChangeRequest.getAction(), cartId)
+                .then(Mono.defer(() -> cartService.getCartDto(cartId)))
+                .map(cartDto -> Rendering.view("cart")
+                        .modelAttribute("items",  cartDto.getItems())
+                        .modelAttribute("total", cartDto.getTotal())
+                        .build());
     }
 }
