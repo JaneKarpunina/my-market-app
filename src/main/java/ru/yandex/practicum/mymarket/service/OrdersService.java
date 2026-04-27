@@ -2,6 +2,8 @@ package ru.yandex.practicum.mymarket.service;
 
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -57,7 +59,7 @@ public class OrdersService {
                                         item.setTitle(row.getTitle());
                                         item.setCount(row.getQuantity());
                                         item.setPrice(row.getPrice());
-                                        return new ItemDto();
+                                        return item;
                                     })
                                     .toList();
 
@@ -135,39 +137,32 @@ public class OrdersService {
 //    }
 
     @Transactional
-    public Long saveOrder(String cartId, HttpServletResponse response) {
+    public Mono<Long> saveOrder(String cartId, ServerHttpResponse response) {
 
-//        List<CartItem> cartItems = cartItemRepository.findByCartId(cartId);
-//
-//        Order order = new Order();
-//        order = orderRepository.save(order);
-//
-//        List<OrderItem> orderItems = new ArrayList<>();
-//
-//        for (CartItem ci : cartItems) {
-//            OrderItem orderItem = new OrderItem();
-//            orderItem.setProduct(ci.getProduct());
-//            orderItem.setQuantity(ci.getQuantity());
-//            orderItem.setOrder(order);
-//
-//            orderItems.add(orderItem);
-//        }
-//
-//        orderItemRepository.saveAll(orderItems);
-//
-//        cartRepository.deleteById(cartId);
-//
-//        deleteCookie(response);
-//
-//        return order.getId();
-
-        return 0L;
+        return orderRepository.save(new Order())
+                .flatMap(savedOrder ->
+                        cartItemRepository.findByCartId(cartId)
+                                .map(ci -> {
+                                    OrderItem oi = new OrderItem();
+                                    oi.setOrderId(savedOrder.getId());
+                                    oi.setProductId(ci.getProductId());
+                                    oi.setQuantity(ci.getQuantity());
+                                    return oi;
+                                })
+                                .collectList()
+                                .flatMap(orderItems -> orderItemRepository.saveAll(orderItems)
+                                        .collectList())
+                                .then(cartRepository.deleteById(cartId))
+                                .doOnSuccess(v -> deleteCookie(response))
+                                .thenReturn(savedOrder.getId())
+                );
     }
 
-    private void deleteCookie(HttpServletResponse response) {
-        Cookie cookie = new Cookie("cartId", null);
-        cookie.setPath("/");
-        cookie.setMaxAge(0);
+    private void deleteCookie(ServerHttpResponse response) {
+        ResponseCookie cookie = ResponseCookie.from("cartId", "")
+                .path("/")
+                .maxAge(0)
+                .build();
         response.addCookie(cookie);
     }
 

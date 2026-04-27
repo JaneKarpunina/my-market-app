@@ -13,7 +13,7 @@ import java.util.List;
 public interface OrderRepository extends ReactiveCrudRepository<Order, String> {
 
     @Query("""
-            SELECT o.id as orderId, oi.quantity, p.id as productId, p.title, p.price
+            SELECT o.id as order_id, oi.quantity, p.id as product_id, p.title, p.price
             FROM ORDERS o
             LEFT JOIN ORDER_ITEM oi ON o.id = oi.order_id
             LEFT JOIN PRODUCT p ON oi.product_id = p.id
@@ -21,7 +21,7 @@ public interface OrderRepository extends ReactiveCrudRepository<Order, String> {
     Flux<OrderFlatRow> findAllOrdersWithItems();
 
     @Query("""
-            SELECT o.id as orderId, oi.quantity, p.id as productId, p.title, p.price
+            SELECT o.id as order_id, oi.quantity, p.id as product_id, p.title, p.price
             FROM ORDERS o
             LEFT JOIN ORDER_ITEM oi ON o.id = oi.order_id
             LEFT JOIN PRODUCT p ON oi.product_id = p.id
