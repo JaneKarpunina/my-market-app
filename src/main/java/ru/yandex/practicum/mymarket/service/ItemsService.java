@@ -48,11 +48,9 @@ public class ItemsService {
         String searchPattern = (search == null) ? "" : search;
         long offset = (long) (Math.max(1, pageNumber) - 1) * pageSize;
 
-        // 1. Параллельно запрашиваем данные и общее количество
         return Mono.zip(
-                // Данные текущей страницы
                 fetchPageItems(searchPattern, sort, pageSize, offset, cartId).collectList(),
-                // Общее количество для расчета страниц
+
                 productRepository.countByTitleAndDescription(searchPattern)
         ).map(tuple -> {
             List<ItemDto> pageItems = tuple.getT1();

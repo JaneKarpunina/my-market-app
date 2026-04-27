@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.dto.OrderDto;
 import ru.yandex.practicum.mymarket.dto.OrderFlatRow;
@@ -39,7 +40,7 @@ public class OrdersService {
         this.cartRepository = cartRepository;
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public Flux<OrderDto> getOrders() {
 
         return orderRepository.findAllOrdersWithItems()
@@ -70,18 +71,39 @@ public class OrdersService {
                 );
     }
 
-    @Transactional
-    public OrderDto getOrder(Long id) {
+    @Transactional(readOnly = true)
+    public Mono<OrderDto> getOrder(Long id) {
 
-//        Order order = orderRepository.getOrder(id).orElse(null);
-//
-//        if (order == null) {
-//            return new OrderDto();
-//        }
-//
-//        return getOrderDto(order);
+        return orderRepository.getOrder(id)
+                .collectList()
+                .flatMap(rows -> {
+                            if (rows.isEmpty()) {
+                                return Mono.just(new OrderDto());
+                            }
 
-        return new OrderDto();
+                            OrderDto orderDto = new OrderDto();
+                            orderDto.setId(rows.getFirst().getOrderId());
+
+                            List<ItemDto> itemDtos = rows.stream()
+                                    .map(row -> {
+                                        ItemDto itemDto = new ItemDto();
+                                        itemDto.setId(row.getProductId());
+                                        itemDto.setTitle(row.getTitle());
+                                        itemDto.setPrice(row.getPrice());
+                                        itemDto.setCount(row.getQuantity());
+                                        return itemDto;
+                                    })
+                                    .toList();
+                    long totalSum = itemDtos.stream()
+                            .mapToLong(item -> item.getPrice() * item.getCount())
+                            .sum();
+
+                    orderDto.setItems(itemDtos);
+                    orderDto.setTotalSum(totalSum);
+
+                    return Mono.just(orderDto);
+                });
+
     }
 
 //    private OrderDto getOrderDto(Order order) {

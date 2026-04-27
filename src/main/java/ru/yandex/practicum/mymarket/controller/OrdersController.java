@@ -34,14 +34,17 @@ public class OrdersController {
     }
 
     @GetMapping("/{id}")
-    public String getOrder(@PathVariable Long id,
+    public Mono<String> getOrder(@PathVariable Long id,
                            @RequestParam(value = "newOrder", required = false, defaultValue = "false") boolean newOrder,
                            Model model) {
 
-        OrderDto orderDto = ordersService.getOrder(id);
+        return ordersService.getOrder(id)
+                .flatMap(orderDto -> {
+                    model.addAttribute("order", orderDto);
+                    model.addAttribute("newOrder", newOrder);
+                    return Mono.just("order");
+                });
 
-        model.addAttribute("order", orderDto);
-        model.addAttribute("newOrder", newOrder);
-        return "order";
+
     }
 }

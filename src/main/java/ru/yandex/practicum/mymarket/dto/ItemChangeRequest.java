@@ -1,5 +1,6 @@
 package ru.yandex.practicum.mymarket.dto;
 
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -9,15 +10,17 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ItemChangeRequest {
 
+    @NotNull
     private Long id;
 
-    private String search;
+    private String search = "";
 
-    private String sort;
+    private String sort = "NO";
 
-    private int pageNumber;
+    private int pageNumber = 1;
 
-    private int pageSize;
+    private int pageSize = 5;
 
+    @NotNull
     private String action;
 }

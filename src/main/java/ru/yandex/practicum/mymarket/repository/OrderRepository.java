@@ -19,12 +19,13 @@ public interface OrderRepository extends ReactiveCrudRepository<Order, String> {
             LEFT JOIN PRODUCT p ON oi.product_id = p.id
             """)
     Flux<OrderFlatRow> findAllOrdersWithItems();
-//
-//    @Query("""
-//            SELECT o FROM Order o
-//            JOIN FETCH o.items oi
-//            JOIN FETCH oi.product
-//            WHERE o.id = :id
-//            """)
-//    Optional<Order> getOrder(Long id);
+
+    @Query("""
+            SELECT o.id as orderId, oi.quantity, p.id as productId, p.title, p.price
+            FROM ORDERS o
+            LEFT JOIN ORDER_ITEM oi ON o.id = oi.order_id
+            LEFT JOIN PRODUCT p ON oi.product_id = p.id
+            WHERE o.id = :id
+            """)
+    Flux<OrderFlatRow> getOrder(Long id);
 }
