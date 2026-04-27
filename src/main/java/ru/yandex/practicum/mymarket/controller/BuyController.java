@@ -1,6 +1,5 @@
 package ru.yandex.practicum.mymarket.controller;
 
-import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.CookieValue;

@@ -7,8 +7,6 @@ import reactor.core.publisher.Flux;
 import ru.yandex.practicum.mymarket.dto.OrderFlatRow;
 import ru.yandex.practicum.mymarket.entity.Order;
 
-import java.util.List;
-
 @Repository
 public interface OrderRepository extends ReactiveCrudRepository<Order, String> {
 

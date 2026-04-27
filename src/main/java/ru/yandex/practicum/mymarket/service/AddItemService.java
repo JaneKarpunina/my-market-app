@@ -49,7 +49,7 @@ public class AddItemService {
                     } catch (IOException e) {
                         throw new RuntimeException("Ошибка создания папки");
                     }
-                }).subscribeOn(Schedulers.boundedElastic()).thenReturn(finalPrice))
+                }).thenReturn(finalPrice))
                 .flatMap(finalPrice -> imageFile.transferTo(filePath)
                         .thenReturn(finalPrice))
                 .flatMap(finalPrice -> {
@@ -60,6 +60,7 @@ public class AddItemService {
                     product.setImgPath(filename);
                     return productRepository.save(product);
                 })
+                .subscribeOn(Schedulers.boundedElastic())
                 .then();
     }
 

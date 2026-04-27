@@ -1,7 +1,5 @@
 package ru.yandex.practicum.mymarket.service;
 
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Service;
@@ -13,22 +11,18 @@ import ru.yandex.practicum.mymarket.dto.ItemsWithPaging;
 import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.entity.Cart;
 import ru.yandex.practicum.mymarket.entity.CartItem;
-import ru.yandex.practicum.mymarket.entity.Product;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.CartRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
 @Service
 public class ItemsService {
 
-    public static final String ALPHA = "ALPHA";
-    public static final String PRICE = "PRICE";
     public static final String PLUS = "PLUS";
     public static final String MINUS = "MINUS";
 
@@ -44,7 +38,8 @@ public class ItemsService {
     }
 
     @Transactional(readOnly = true)
-    public Mono<ItemsWithPaging> getItemsWithPaging(String search, String sort, int pageNumber, int pageSize, String cartId) {
+    public Mono<ItemsWithPaging> getItemsWithPaging(String search, String sort, int pageNumber, int pageSize,
+                                                    String cartId) {
         String searchPattern = (search == null) ? "" : search;
         long offset = (long) (Math.max(1, pageNumber) - 1) * pageSize;
 
@@ -93,78 +88,13 @@ public class ItemsService {
         return rows;
     }
 
-//    @Transactional
-//    public ItemsWithPaging getItemsWithPaging(String search, String sort, int pageNumber, int pageSize, String cartId) {
-//
-//        List<ItemDto> items = getItems(search, sort, cartId);
-//
-//        int totalItems = items.size();
-//
-//        if (totalItems == 0) {
-//            List<List<ItemDto>> itemRows = new ArrayList<>();
-//            return new ItemsWithPaging(itemRows, new Paging(pageSize, pageNumber, false, false));
-//        }
-//        int totalPages = (int) Math.ceil((double) totalItems / pageSize);
-//        if (pageNumber < 1) pageNumber = 1;
-//        if (pageNumber > totalPages) pageNumber = totalPages;
-//
-//        int fromIndex = (pageNumber - 1) * pageSize;
-//        int toIndex = Math.min(fromIndex + pageSize, totalItems);
-//        List<ItemDto> pageItems = items.subList(fromIndex, toIndex);
-//
-//        List<List<ItemDto>> itemRows = new ArrayList<>();
-//        for (int i = 0; i < pageItems.size(); i += 3) {
-//            int end = Math.min(i + 3, pageItems.size());
-//            List<ItemDto> subList = new ArrayList<>(pageItems.subList(i, end));
-//
-//            while (subList.size() < 3) {
-//
-//                ItemDto item = new ItemDto();
-//                item.setId(-1L);
-//                subList.add(item);
-//            }
-//
-//            itemRows.add(subList);
-//        }
-//
-//        boolean hasPrevious = pageNumber > 1;
-//        boolean hasNext = pageNumber < totalPages;
-//
-//        return new ItemsWithPaging(itemRows, new Paging(pageSize, pageNumber, hasPrevious, hasNext));
-//
-//
-//    }
-//
-//    private List<ItemDto> getItems(String search, String sort, String cartId) {
-//
-//        List<ItemDto> items;
-//        if (cartId != null) {
-//            items = productRepository.findProductsWithQuantity(search, cartId);
-//        }
-//        else {
-//            items = productRepository.findProductsWithZeroCartId(search);
-//        }
-//
-//        switch (sort) {
-//            case ALPHA:
-//                items.sort((a, b) -> a.getTitle().compareToIgnoreCase(b.getTitle()));
-//                break;
-//            case PRICE:
-//                items.sort(Comparator.comparingLong(ItemDto::getPrice));
-//                break;
-//            default:
-//                break;
-//        }
-//        return items;
-//    }
-
     @Transactional
     public Mono<Void> changeItemsCount(Long id, String action, ServerHttpResponse response, String cartId) {
         return productRepository.findById(id)
                 .flatMap(product -> {
                     // Если cartId нет и действие PLUS — создаем новую корзину
                     if (cartId == null || cartId.isEmpty()) {
-                        if ("PLUS".equals(action)) {
+                        if (PLUS.equals(action)) {
                             String newCartId = UUID.randomUUID().toString();
                             addCartCookie(response, newCartId);
                             return createCartAndItem(id, newCartId);
@@ -175,7 +105,7 @@ public class ItemsService {
                     return cartRepository.findById(cartId)
                             // Если кука есть, но корзины в БД нет (например, удалена)
                             .switchIfEmpty(Mono.defer(() -> {
-                                if ("PLUS".equals(action)) {
+                                if (PLUS.equals(action)) {
                                     return createCartAndItem(id, cartId).then(Mono.empty());
                                 }
                                 return Mono.empty();
@@ -213,7 +143,7 @@ public class ItemsService {
     private Mono<Void> setCartItem(Long id, String action, String cartId) {
         return cartItemRepository.findByCartIdAndProductId(cartId, id)
                 .switchIfEmpty(Mono.defer(() -> {
-                    if ("PLUS".equals(action)) {
+                    if (PLUS.equals(action)) {
                         return cartItemRepository.save(new CartItem(null, cartId, id, 1, null))
                                 .then(Mono.empty());
                     }
@@ -222,15 +152,15 @@ public class ItemsService {
                 .flatMap(cartItem -> {
                     int quantity = cartItem.getQuantity();
 
-                    if (quantity == 1 && "MINUS".equals(action)) {
+                    if (quantity == 1 && MINUS.equals(action)) {
                         return cartItemRepository.delete(cartItem);
                     }
 
                     CartItem updatedItem = null;
-                    if (quantity > 1 && "MINUS".equals(action)) {
+                    if (quantity > 1 && MINUS.equals(action)) {
                         cartItem.setQuantity(quantity - 1);
                         updatedItem = cartItem;
-                    } else if (quantity < Integer.MAX_VALUE && "PLUS".equals(action)) {
+                    } else if (quantity < Integer.MAX_VALUE && PLUS.equals(action)) {
                         cartItem.setQuantity(quantity + 1);
                         updatedItem = cartItem;
                     }
@@ -239,75 +169,6 @@ public class ItemsService {
                 })
                 .then();
     }
-
-//    @Transactional
-//    public void changeItemsCount(Long id, String action, HttpServletResponse response, String cartId) {
-//
-//        Product product = productRepository.findById(id).orElse(null);
-//
-//        if (product == null) {
-//            return;
-//        }
-//
-//        if ((cartId == null || cartId.isEmpty())) {
-//
-//            if (PLUS.equals(action)) {
-//                cartId = UUID.randomUUID().toString();
-//                Cookie cookie = new Cookie("cartId", cartId);
-//                cookie.setMaxAge(7 * 24 * 60 * 60); // Жизнь куки — 7 дней
-//                cookie.setPath("/");               // Доступна для всего сайта
-//                cookie.setHttpOnly(true);
-//                response.addCookie(cookie);
-//
-//                createCartAndItem(id, cartId);
-//            }
-//            return;
-//        }
-//        else {
-//            Cart savedCart = cartRepository.findById(cartId).orElse(null);
-//            if (savedCart == null) {
-//                if (PLUS.equals(action)) {
-//                    createCartAndItem(id, cartId);
-//                }
-//                return;
-//            }
-//        }
-//
-//        setCartItem(id, action, cartId);
-//
-//
-//    }
-
-//    private void createCartAndItem(Long id, String cartId) {
-//        Cart cart = new Cart();
-//        cart.setId(cartId);
-//
-//        cartRepository.save(cart);
-//        cartItemRepository.insertCartItem(cartId, id, 1); //создается новый элемент
-//    }
-//
-//    private void setCartItem(Long id, String action, String cartId) {
-//
-//        CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cartId, id).orElse(null);
-//
-//        if (cartItem == null) {
-//            if (PLUS.equals(action)) {
-//                cartItemRepository.insertCartItem(cartId, id, 1); //создается новый элемент
-//            }
-//            return;
-//        }
-//
-//        int quantity = cartItem.getQuantity();
-//        if (quantity == 1 && MINUS.equals(action)) {
-//            cartItemRepository.delete(cartItem);
-//        }
-//        else if (quantity > 1 && MINUS.equals(action)) {
-//            cartItemRepository.updateQuantity(cartItem.getId(), quantity - 1);
-//        }
-//        else if (quantity < Integer.MAX_VALUE && PLUS.equals(action)) {
-//            cartItemRepository.updateQuantity(cartItem.getId(), quantity + 1);
-//        }
-//    }
 
     @Transactional(readOnly = true)
     public Mono<ItemDto> getItemWithQuantity(Long id, String cartId) {

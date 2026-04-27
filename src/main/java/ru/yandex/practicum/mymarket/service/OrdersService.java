@@ -1,7 +1,5 @@
 package ru.yandex.practicum.mymarket.service;
 
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Service;
@@ -11,16 +9,13 @@ import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.dto.OrderDto;
 import ru.yandex.practicum.mymarket.dto.OrderFlatRow;
-import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.entity.Order;
 import ru.yandex.practicum.mymarket.entity.OrderItem;
-import ru.yandex.practicum.mymarket.entity.Product;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.CartRepository;
 import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderRepository;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -108,33 +103,6 @@ public class OrdersService {
 
     }
 
-//    private OrderDto getOrderDto(Order order) {
-//        OrderDto orderDto = new OrderDto();
-//
-//        orderDto.setId(order.getId());
-//
-//        long totalSum = 0L;
-//
-//        List<ItemDto> itemDtos = new ArrayList<>();
-//        for (OrderItem item : order.getItems()) {
-//
-//            ItemDto itemDto = new ItemDto();
-//            Product product = item.getProduct();
-//
-//            itemDto.setId(product.getId());
-//            itemDto.setTitle(product.getTitle());
-//            itemDto.setPrice(product.getPrice());
-//            itemDto.setCount(item.getQuantity());
-//
-//            itemDtos.add(itemDto);
-//
-//            totalSum += product.getPrice() * item.getQuantity();
-//        }
-//
-//        orderDto.setItems(itemDtos);
-//        orderDto.setTotalSum(totalSum);
-//        return orderDto;
-//    }
 
     @Transactional
     public Mono<Long> saveOrder(String cartId, ServerHttpResponse response) {
