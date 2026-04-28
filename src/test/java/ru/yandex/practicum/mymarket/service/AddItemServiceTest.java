@@ -6,15 +6,24 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
+import ru.yandex.practicum.mymarket.entity.Product;
 import ru.yandex.practicum.mymarket.exception.NumberOutsideOfRangeException;
 import ru.yandex.practicum.mymarket.exception.UnsupportedMediaTypeException;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 import ru.yandex.practicum.mymarket.utils.Utils;
 
 import java.io.IOException;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
@@ -22,15 +31,21 @@ import static org.mockito.Mockito.*;
 @SpringBootTest(classes = AddItemService.class)
 public class AddItemServiceTest {
 
+    public static final String TITLE = "title";
+    public static final String DESC = "desc";
+    public static final String PRICE = "100";
     @MockitoBean
     private ProductRepository productRepository;
 
     @Autowired
     private AddItemService addItemService;
 
+    private FilePart mockFile;
+
     @BeforeEach
     void resetMocks() {
         reset(productRepository);
+        mockFile = mock(FilePart.class);
     }
 
     @AfterAll
@@ -39,80 +54,64 @@ public class AddItemServiceTest {
     }
 
     @Test
-    void testAddItem_success() {
+    void addItem_Success() {
+        byte[] pngSignature = new byte[]{(byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10};
+        DataBuffer buffer = new DefaultDataBufferFactory().wrap(pngSignature);
 
-        String title = "Тест";
-        String description = "Описание";
-        String price = "100";
+        when(mockFile.filename()).thenReturn("image.png");
+        when(mockFile.content()).thenReturn(Flux.just(buffer));
+        when(mockFile.transferTo(any(Path.class))).thenReturn(Mono.empty());
+        when(productRepository.save(any())).thenReturn(Mono.just(new Product()));
 
-        MockMultipartFile image = getMockMultipartFile();
-
-        addItemService.addItem(title, description, price, image);
+        StepVerifier.create(addItemService.addItem(TITLE, DESC, PRICE, mockFile))
+                .verifyComplete();
 
         verify(productRepository, times(1)).save(any());
-
     }
 
     @Test
-    void testAddItem_invalidFileType() {
-        MockMultipartFile image = new MockMultipartFile("imgUrl",
-                "image-file.jpg",
-                MediaType.IMAGE_JPEG_VALUE,
-                "some text".getBytes());
+    void addItem_InvalidPrice_FormatError() {
+        StepVerifier.create(addItemService.addItem(TITLE, DESC, "abc", mockFile))
+                .expectError(IllegalArgumentException.class)
+                .verify();
 
-        assertThrows(UnsupportedMediaTypeException.class, () ->
-                addItemService.addItem("title", "desc", "50", image));
+        verifyNoInteractions(productRepository);
     }
 
     @Test
-    void testAddItem_invalidPrice_negative() {
+    void addItem_PriceOutOfRange() {
+        String hugePrice = "999999999999999999999999999";
 
-        testNumberOutsideOfRangeException("-100");
-
-
+        StepVerifier.create(addItemService.addItem(TITLE, DESC, hugePrice, mockFile))
+                .expectError(NumberOutsideOfRangeException.class)
+                .verify();
     }
 
     @Test
-    void testAddItem_invalidPrice_maxExceeded() {
+    void addItem_FileTooLarge() {
+        // Эмулируем файл размером больше MAX_FILE_SIZE
+        byte[] bigContent = new byte[1024 * 1024 * 10]; // 10MB
+        DataBuffer buffer = new DefaultDataBufferFactory().wrap(bigContent);
 
-        testNumberOutsideOfRangeException("10000000000000000000");
+        when(mockFile.filename()).thenReturn("large.jpg");
+        when(mockFile.content()).thenReturn(Flux.just(buffer));
 
-
-    }
-
-    private void testNumberOutsideOfRangeException(String price) {
-        String title = "Тест";
-        String description = "Описание";
-
-        MockMultipartFile image = getMockMultipartFile();
-
-        assertThrows(NumberOutsideOfRangeException.class, () ->
-                addItemService.addItem(title, description, price, image));
+        StepVerifier.create(addItemService.addItem(TITLE, DESC, PRICE, mockFile))
+                .expectError(MaxUploadSizeExceededException.class)
+                .verify();
     }
 
     @Test
-    void testAddItem_invalidPrice_notLongValue() {
+    void addItem_InvalidFileType() {
+        // Эмулируем текстовый файл вместо картинки
+        byte[] textContent = "This is a simple text file content".getBytes();
+        DataBuffer buffer = new DefaultDataBufferFactory().wrap(textContent);
 
-        String title = "Тест";
-        String description = "Описание";
-        String price = "abc";
+        when(mockFile.filename()).thenReturn("test.txt");
+        when(mockFile.content()).thenReturn(Flux.just(buffer));
 
-        MockMultipartFile image = getMockMultipartFile();
-
-        assertThrows(IllegalArgumentException.class, () ->
-                addItemService.addItem(title, description, price, image));
-
-
-    }
-
-    private MockMultipartFile getMockMultipartFile() {
-        byte[] jpegBytes = new byte[] {
-                (byte)0xFF, (byte)0xD8, // SOI (Start of Image)
-                (byte)0xFF, (byte)0xD9 // EOI (End of Image)
-        };
-        return new MockMultipartFile("imgUrl",
-                "image-file.jpg",
-                MediaType.IMAGE_JPEG_VALUE,
-                jpegBytes);
+        StepVerifier.create(addItemService.addItem(TITLE, DESC, PRICE, mockFile))
+                .expectError(UnsupportedMediaTypeException.class)
+                .verify();
     }
 }

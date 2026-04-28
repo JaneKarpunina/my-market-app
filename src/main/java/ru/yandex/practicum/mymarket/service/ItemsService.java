@@ -172,9 +172,8 @@ public class ItemsService {
 
     @Transactional(readOnly = true)
     public Mono<ItemDto> getItemWithQuantity(Long id, String cartId) {
-        return productRepository.findById(id) // Возвращает Mono<Product>
-                .flatMap(product -> getItemDto(id, cartId)) // Если продукт найден, идем за DTO
-                .defaultIfEmpty(new ItemDto()); // Если продукт не найден в принципе
+        return productRepository.findById(id)
+                .flatMap(product -> getItemDto(id, cartId));
     }
 
     private Mono<ItemDto> getItemDto(Long id, String cartId) {

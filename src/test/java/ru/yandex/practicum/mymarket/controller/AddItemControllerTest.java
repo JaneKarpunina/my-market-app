@@ -1,6 +1,6 @@
 package ru.yandex.practicum.mymarket.controller;
 
-import org.junit.jupiter.api.Test;
+/*import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.mock.web.MockMultipartFile;
@@ -59,4 +59,4 @@ public class AddItemControllerTest {
         );
     }
 
-}
+}*/

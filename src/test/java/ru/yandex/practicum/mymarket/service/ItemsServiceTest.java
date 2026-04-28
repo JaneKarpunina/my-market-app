@@ -1,23 +1,25 @@
 package ru.yandex.practicum.mymarket.service;
 
-import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.util.LinkedMultiValueMap;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.dto.ItemsWithPaging;
+import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.entity.Cart;
 import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.entity.Product;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -25,13 +27,14 @@ import static org.mockito.Mockito.*;
 @SpringBootTest(classes = ItemsService.class)
 public class ItemsServiceTest extends BaseTest {
 
-    private final Long ITEM_ID = 100L;
-    private final String CART_ID = "test-uuid";
-    private final String PLUS = "PLUS";
-    private final String MINUS = "MINUS";
+    private final Long productId = 1L;
+    private final String cartId = "test-cart";
 
     @MockitoBean
     private ProductRepository productRepository;
+
+    @MockitoBean
+    private ServerHttpResponse response;
 
     @Autowired
     private ItemsService itemsService;
@@ -44,280 +47,276 @@ public class ItemsServiceTest extends BaseTest {
     }
 
     @Test
-    void test_getItemsWithPaging_emptyItems() {
-        when(productRepository.findProductsWithZeroCartId(anyString())).thenReturn(new ArrayList<>());
+    void getItemsWithPaging_Success() {
+        String search = "phone";
+        String cartId = "cart-123";
+        int page = 1;
+        int size = 3;
 
-        ItemsWithPaging result = itemsService.getItemsWithPaging("search", "ALPHA", 1, 10, null);
+        ItemDto item1 = new ItemDto();
+        item1.setId(1L);
+        ItemDto item2 = new ItemDto();
+        item2.setId(2L);
+        // Всего 2 товара, значит должна быть 1 строка, дополненная 1 пустышкой
 
-        verify(productRepository, times(1)).findProductsWithZeroCartId(anyString());
-        assertNotNull(result);
-        assertTrue(result.getItems().isEmpty());
-        assertFalse(result.getPaging().isHasPrevious());
-        assertFalse(result.getPaging().isHasNext());
+        when(productRepository.findProductsWithQuantityPaged(anyString(), anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(Flux.just(item1, item2));
+
+        when(productRepository.countByTitleAndDescription(anyString()))
+                .thenReturn(Mono.just(2L));
+
+        Mono<ItemsWithPaging> result = itemsService.getItemsWithPaging(search, "asc", page, size, cartId);
+
+        StepVerifier.create(result)
+                .assertNext(pagingResponse -> {
+                    // Проверка пагинации
+                    assertNotNull(pagingResponse.getPaging());
+                    assertEquals(1, pagingResponse.getPaging().getPageNumber());
+                    assertFalse(pagingResponse.getPaging().isHasNext());
+
+                    // Проверка разбиения на строки (partitionAndFill)
+                    List<List<ItemDto>> rows = pagingResponse.getItems();
+                    assertEquals(1, rows.size());
+                    assertEquals(3, rows.getFirst().size());
+                    assertEquals(-1L, rows.getFirst().get(2).getId());
+                })
+                .verifyComplete();
     }
 
     @Test
-    void test_getItemsWithPaging_someItems_less_than_pageSize() {
-        List<ItemDto> mockItems = new ArrayList<>();
-        for (long i = 1; i <= 5; i++) {
-            ItemDto item = new ItemDto();
-            item.setId(i);
-            item.setTitle("Title" + i);
-            item.setPrice(i * 100);
-            mockItems.add(item);
-        }
-        when(productRepository.findProductsWithZeroCartId(anyString()))
-                .thenReturn(mockItems);
+    void getItemsWithPaging_NoCartId() {
+        when(productRepository.findProductsWithZeroCartIdPaged(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(Flux.empty());
+        when(productRepository.countByTitleAndDescription(anyString()))
+                .thenReturn(Mono.just(0L));
 
-        ItemsWithPaging result = itemsService.getItemsWithPaging("search", "ALPHA", 1, 10, null);
+        Mono<ItemsWithPaging> result = itemsService.getItemsWithPaging(null, "desc",
+                1, 3, null);
 
-        verify(productRepository, times(1)).findProductsWithZeroCartId(anyString());
-
-        assertEquals(2, result.getItems().size());
-        List<List<ItemDto>> rows = result.getItems();
-        assertEquals(3, rows.get(0).size()); // должна быть 3 элемента (заполнены до 3)
-        assertEquals(-1L, rows.get(1).get(2).getId()); // последний добавленный "заглушка"
-
-        assertFalse(result.getPaging().isHasPrevious());
-        assertFalse(result.getPaging().isHasNext());
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertTrue(response.getItems().isEmpty());
+                    assertEquals(1, response.getPaging().getPageNumber());
+                })
+                .verifyComplete();
     }
 
     @Test
-    void test_getItemsWithPaging_multiplePages() {
-        List<ItemDto> mockItems = new ArrayList<>();
-        for (long i = 1; i <= 25; i++) {
-            ItemDto item = new ItemDto();
-            item.setId(i);
-            item.setTitle("Title" + i);
-            item.setPrice(i * 10);
-            mockItems.add(item);
-        }
-        when(productRepository.findProductsWithQuantity(anyString(), anyString()))
-                .thenReturn(mockItems);
+    void getItemsWithPaging_MultiplePages() {
 
-        // 2-я страница, размер 10
-        ItemsWithPaging result = itemsService.getItemsWithPaging("search", "PRICE", 2, 10, "abc");
+        int pageSize = 3;
+        long totalItems = 10; // 10 товаров / 3 на стр = 4 страницы
 
-        verify(productRepository, times(1)).findProductsWithQuantity(anyString(), anyString());
+        when(productRepository.findProductsWithZeroCartIdPaged(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(Flux.just(new ItemDto(), new ItemDto(), new ItemDto()));
+        when(productRepository.countByTitleAndDescription(anyString()))
+                .thenReturn(Mono.just(totalItems));
 
-        assertEquals(4, result.getItems().size());
-        assertEquals(3, result.getItems().get(0).size()); // каждая строка по 3, последний может быть меньше
-        assertEquals(3, result.getItems().get(3).size()); // последний блок (может включать "заглушки")
-        assertTrue(result.getPaging().isHasNext());
-        assertTrue(result.getPaging().isHasPrevious());
+        Mono<ItemsWithPaging> result = itemsService.getItemsWithPaging("", "asc", 2,
+                pageSize, null);
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    Paging p = response.getPaging();
+                    assertEquals(2, p.getPageNumber());
+                    assertTrue(p.isHasPrevious());
+                    assertTrue(p.isHasNext());
+                })
+                .verifyComplete();
     }
 
     @Test
-    void test_getItemsWithPaging_sorting_by_title() {
-        List<ItemDto> mockItems = Arrays.asList(
-                createItem(1, "Banana", 200),
-                createItem(2, "Apple", 300)
-        );
-        when(productRepository.findProductsWithQuantity(anyString(), anyString()))
-                .thenReturn(mockItems);
+    void changeItemsCount_NewCartCreation() {
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(cartRepository.save(any(Cart.class))).thenReturn(Mono.just(new Cart()));
+        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(new CartItem()));
 
-        ItemsWithPaging result = itemsService.getItemsWithPaging("search", "ALPHA", 1, 10, "abc");
-        List<ItemDto> items = result.getItems().stream()
-                .flatMap(List::stream)
-                .toList();
+        when(response.getCookies()).thenReturn(new LinkedMultiValueMap<>());
 
-        verify(productRepository, times(1)).findProductsWithQuantity(anyString(), anyString());
+        StepVerifier.create(itemsService.changeItemsCount(productId, "PLUS", response, null))
+                .verifyComplete();
 
-        assertEquals("Apple", items.get(0).getTitle());
-        assertEquals("Banana", items.get(1).getTitle());
-    }
-
-    @Test
-    void test_getItemsWithPaging_sorting_by_price() {
-        List<ItemDto> mockItems = Arrays.asList(
-                createItem(1, "Title1", 300),
-                createItem(2, "Title2", 100)
-        );
-        when(productRepository.findProductsWithQuantity(anyString(), anyString()))
-                .thenReturn(mockItems);
-
-        ItemsWithPaging result = itemsService.getItemsWithPaging("search", "PRICE", 1, 10, "abc");
-        List<ItemDto> items = result.getItems().stream()
-                .flatMap(List::stream)
-                .toList();
-
-        verify(productRepository, times(1)).findProductsWithQuantity(anyString(), anyString());
-
-        assertTrue(items.get(0).getPrice() <= items.get(1).getPrice());
-    }
-
-    private ItemDto createItem(long id, String title, long price) {
-        ItemDto item = new ItemDto();
-        item.setId(id);
-        item.setTitle(title);
-        item.setPrice(price);
-        return item;
-    }
-
-    @Test
-    void test_changeItemsCount_NewCart_ShouldSetCookieAndCreateCart() {
-        MockHttpServletResponse response = new MockHttpServletResponse();
-
-        when(productRepository.findById(ITEM_ID)).thenReturn(Optional.of(new Product()));
-
-        itemsService.changeItemsCount(ITEM_ID, PLUS, response, null);
-
-        // Проверяем создание корзины
         verify(cartRepository).save(any(Cart.class));
-        verify(cartItemRepository).insertCartItem(anyString(), eq(ITEM_ID), eq(1));
-
-        // Проверяем Cookie
-        Cookie cookie = response.getCookie("cartId");
-        assertNotNull(cookie);
-        assertNotNull(cookie.getValue());
-        assertEquals(604800, cookie.getMaxAge()); // 7 дней
+        verify(cartItemRepository).save(any(CartItem.class));
+        verify(response).addCookie(any(ResponseCookie.class));
     }
 
     @Test
-    void test_changeItemsCount_noProduct() {
-        MockHttpServletResponse response = new MockHttpServletResponse();
+    void changeItemsCount_IncrementExistingItem() {
+        CartItem existingItem = new CartItem(10L, cartId, productId, 1, 0L);
 
-        itemsService.changeItemsCount(ITEM_ID, PLUS, response, null);
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(cartRepository.findById(cartId)).thenReturn(Mono.just(new Cart()));
+        when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.just(existingItem));
+        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(existingItem));
 
-        verify(cartRepository, never()).save(any());
+        StepVerifier.create(itemsService.changeItemsCount(productId, "PLUS", response, cartId))
+                .verifyComplete();
 
+        verify(cartItemRepository).save(argThat(item -> item.getQuantity() == 2));
     }
 
     @Test
-    void test_changeItemsCount_ExistingCart_ShouldIncrementQuantity() {
-        cartItemExists(PLUS, 6);
+    void changeItemsCount_CartNotFoundInDb_CreateNew() {
+        String existingCartId = "expired-cart-id";
+
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(cartRepository.findById(existingCartId)).thenReturn(Mono.empty());
+
+        when(cartRepository.save(any(Cart.class))).thenReturn(Mono.just(new Cart()));
+        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(new CartItem()));
+
+        StepVerifier.create(itemsService.changeItemsCount(productId, "PLUS", response, existingCartId))
+                .verifyComplete();
+
+        verify(cartRepository).save(argThat(cart -> cart.getId().equals(existingCartId)));
+        verify(cartItemRepository).save(argThat(item -> item.getProductId().equals(productId)));
+
+
+        verify(response, times(0)).addCookie(any());
     }
 
     @Test
-    void test_changeItemsCount_QuantityIsOne_MinusShouldDelete() {
-        CartItem existingItem = new CartItem(1L, new Cart(), new Product(), 1);
+    void changeItemsCount_RemoveItemOnMinus() {
 
-        cartExistsCartItemNotExists(existingItem);
+        CartItem existingItem = new CartItem(10L, cartId, productId, 1, 0L);
 
-        itemsService.changeItemsCount(ITEM_ID, MINUS, new MockHttpServletResponse(), CART_ID);
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(cartRepository.findById(cartId)).thenReturn(Mono.just(new Cart()));
+        when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.just(existingItem));
+        when(cartItemRepository.delete(existingItem)).thenReturn(Mono.empty());
 
-        // Если количество 1 и нажали МИНУС — удаляем
+        StepVerifier.create(itemsService.changeItemsCount(productId, "MINUS", response, cartId))
+                .verifyComplete();
+
         verify(cartItemRepository).delete(existingItem);
-        verify(cartItemRepository, never()).updateQuantity(anyLong(), anyInt());
     }
 
     @Test
-    void test_changeItemsCount_existingCartId_ShouldCreateCartAndItem() {
+    void changeItemsCount_ProductNotFound() {
 
-        when(productRepository.findById(ITEM_ID)).thenReturn(Optional.of(new Product()));
-        when(cartRepository.findById(CART_ID)).thenReturn(Optional.empty());
+        when(productRepository.findById(productId)).thenReturn(Mono.empty());
 
-        itemsService.changeItemsCount(ITEM_ID, PLUS, new MockHttpServletResponse(), CART_ID);
+        StepVerifier.create(itemsService.changeItemsCount(productId, "PLUS", response, cartId))
+                .verifyComplete();
 
-        verify(cartRepository).save(any());
-        verify(cartItemRepository).insertCartItem(CART_ID, ITEM_ID, 1);
+        verifyNoInteractions(cartRepository);
+        verifyNoInteractions(cartItemRepository);
     }
 
     @Test
-    void test_changeItemsCount_existingCartId_actionMinus() {
+    void changeItemsCount_AddItemToExistingCartViaSwitch() {
 
-        when(productRepository.findById(ITEM_ID)).thenReturn(Optional.of(new Product()));
-        when(cartRepository.findById(CART_ID)).thenReturn(Optional.empty());
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(cartRepository.findById(cartId)).thenReturn(Mono.just(new Cart()));
 
-        itemsService.changeItemsCount(ITEM_ID, MINUS, new MockHttpServletResponse(), CART_ID);
+        when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.empty());
+        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(new CartItem()));
 
-        verify(cartRepository, never()).save(any());
-        verify(cartItemRepository, never()).insertCartItem(CART_ID, ITEM_ID, 1);
+        StepVerifier.create(itemsService.changeItemsCount(productId, "PLUS", response, cartId))
+                .verifyComplete();
+
+        verify(cartItemRepository).save(argThat(item -> item.getQuantity() == 1));
     }
 
     @Test
-    void test_changeItemsCount_itemNotFoundInCart_plusShouldInsert() {
-        cartExistsCartItemNotExists(null);
+    void changeItemsCount_DecrementExistingItem() {
 
-        itemsService.changeItemsCount(ITEM_ID, PLUS, new MockHttpServletResponse(), CART_ID);
+        int initialQuantity = 5;
+        CartItem existingItem = new CartItem(10L, cartId, productId, initialQuantity, 0L);
 
-        // Если товара нет в корзине — создаем запись
-        verify(cartItemRepository).insertCartItem(CART_ID, ITEM_ID, 1);
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(cartRepository.findById(cartId)).thenReturn(Mono.just(new Cart()));
+        when(cartItemRepository.findByCartIdAndProductId(cartId, productId))
+                .thenReturn(Mono.just(existingItem));
+
+        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(existingItem));
+
+        StepVerifier.create(itemsService.changeItemsCount(productId, "MINUS", response, cartId))
+                .verifyComplete();
+
+        verify(cartItemRepository).save(argThat(item ->
+                item.getQuantity() == (initialQuantity - 1) && item.getProductId().equals(productId)
+        ));
+
+        verify(cartItemRepository, never()).delete(any());
     }
 
     @Test
-    void test_changeItemsCount_itemNotFoundInCart_minusShouldNotInsert() {
-        cartExistsCartItemNotExists(null);
+    void getItemWithQuantity_ProductNotFound() {
 
-        itemsService.changeItemsCount(ITEM_ID, MINUS, new MockHttpServletResponse(), CART_ID);
+        when(productRepository.findById(productId)).thenReturn(Mono.empty());
 
-        // Если товара нет в корзине — создаем запись
-        verify(cartItemRepository, never()).insertCartItem(CART_ID, ITEM_ID, 1);
+        Mono<ItemDto> result = itemsService.getItemWithQuantity(productId, cartId);
+
+        StepVerifier.create(result)
+                .verifyComplete();
+
+        verify(productRepository, times(1)).findById(productId);
+        verifyNoMoreInteractions(productRepository);
     }
 
     @Test
-    void test_changeItemsCount_ExistingCart_ShouldDecrementQuantity() {
-        cartItemExists(MINUS, 4);
-    }
+    void getItemWithQuantity_NoCartId() {
 
-    private void cartItemExists(String MINUS, int quantity) {
-        CartItem existingItem = new CartItem(1L, new Cart(), new Product(), 5);
+        ItemDto expectedDto = new ItemDto();
+        expectedDto.setId(productId);
+        expectedDto.setTitle("Product 1");
+        expectedDto.setPrice( 100L);
+        expectedDto.setCount(0);
 
-        cartExistsCartItemNotExists(existingItem);
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(productRepository.findProductWithZeroCartId(productId)).thenReturn(Mono.just(expectedDto));
 
-        itemsService.changeItemsCount(ITEM_ID, MINUS, new MockHttpServletResponse(), CART_ID);
+        Mono<ItemDto> result = itemsService.getItemWithQuantity(productId, "");
 
-        // Должен вызвать update с quantity + 1
-        verify(cartItemRepository).updateQuantity(existingItem.getId(), quantity);
-    }
+        StepVerifier.create(result)
+                .assertNext(dto -> {
+                    assertEquals(productId, dto.getId());
+                    assertEquals(0, dto.getCount());
+                })
+                .verifyComplete();
 
-    private void cartExistsCartItemNotExists(CartItem cartItem) {
-        when(productRepository.findById(ITEM_ID)).thenReturn(Optional.of(new Product()));
-        when(cartRepository.findById(CART_ID)).thenReturn(Optional.of(new Cart()));
-        when(cartItemRepository.findByCartIdAndProductId(CART_ID, ITEM_ID))
-                .thenReturn(Optional.ofNullable(cartItem));
-    }
-
-    @Test
-    void test_getItemWithQuantity_ShouldThrowException_WhenProductDoesNotExist() {
-        when(productRepository.findById(ITEM_ID)).thenReturn(Optional.empty());
-
-        itemsService.getItemWithQuantity(ITEM_ID, CART_ID);
-
-        verify(productRepository, never()).findProductWithQuantity(any(), any());
+        verify(productRepository).findProductWithZeroCartId(productId);
+        verify(productRepository, never()).findProductWithQuantity(anyLong(), anyString());
     }
 
     @Test
-    void test_getItemWithQuantity_WithCartId_ShouldReturnProductWithQuantity() {
-        ItemDto mockDto = new ItemDto();
-        mockDto.setId(ITEM_ID);
-        mockDto.setCount(5);
+    void getItemWithQuantity_WithCartId() {
 
-        when(productRepository.findById(ITEM_ID)).thenReturn(Optional.of(new Product()));
-        when(productRepository.findProductWithQuantity(ITEM_ID, CART_ID)).thenReturn(Optional.of(mockDto));
+        ItemDto expectedDto = new ItemDto();
+        expectedDto.setId(productId);
+        expectedDto.setTitle("Product 1");
+        expectedDto.setPrice( 100L);
+        expectedDto.setCount(5);
 
-        ItemDto result = itemsService.getItemWithQuantity(ITEM_ID, CART_ID);
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(productRepository.findProductWithQuantity(productId, cartId)).thenReturn(Mono.just(expectedDto));
 
-        assertNotNull(result);
-        assertEquals(5, result.getCount());
-        verify(productRepository).findProductWithQuantity(ITEM_ID, CART_ID);
+        Mono<ItemDto> result = itemsService.getItemWithQuantity(productId, cartId);
+
+        StepVerifier.create(result)
+                .assertNext(dto -> {
+                    assertEquals(productId, dto.getId());
+                    assertEquals(5, dto.getCount());
+                })
+                .verifyComplete();
+
+        verify(productRepository).findProductWithQuantity(productId, cartId);
     }
 
     @Test
-    void test_getItemWithQuantity_NoCartId_ShouldReturnProductWithZeroQuantity() {
-        ItemDto mockDto = new ItemDto();
-        mockDto.setId(ITEM_ID);
-        mockDto.setCount(0);
+    void getItemWithQuantity_DetailsNotFound() {
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(productRepository.findProductWithQuantity(productId, cartId)).thenReturn(Mono.empty());
 
-        when(productRepository.findById(ITEM_ID)).thenReturn(Optional.of(new Product()));
-        when(productRepository.findProductWithZeroCartId(ITEM_ID)).thenReturn(Optional.of(mockDto));
+        Mono<ItemDto> result = itemsService.getItemWithQuantity(productId, cartId);
 
-        ItemDto result = itemsService.getItemWithQuantity(ITEM_ID, null);
-
-        assertNotNull(result);
-        assertEquals(0, result.getCount());
-        verify(productRepository).findProductWithZeroCartId(ITEM_ID);
-    }
-
-    @Test
-    void test_getItemWithQuantity_WhenDtoNotFound_ShouldReturnEmptyItemDto() {
-        when(productRepository.findById(ITEM_ID)).thenReturn(Optional.of(new Product()));
-        when(productRepository.findProductWithZeroCartId(ITEM_ID)).thenReturn(Optional.empty());
-
-        ItemDto result = itemsService.getItemWithQuantity(ITEM_ID, "");
-
-        assertNotNull(result);
-        assertNull(result.getId());
+        StepVerifier.create(result)
+                .assertNext(dto -> {
+                    assertNull(dto.getId());
+                })
+                .verifyComplete();
     }
 
 }

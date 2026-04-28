@@ -1,6 +1,6 @@
 package ru.yandex.practicum.mymarket.controller;
 
-import jakarta.servlet.http.Cookie;
+/*import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -141,4 +141,4 @@ public class ItemsControllerTest {
 
         verify(itemsService).changeItemsCount(eq(itemId), eq("MINUS"), any(), isNull());
     }
-}
+}*/

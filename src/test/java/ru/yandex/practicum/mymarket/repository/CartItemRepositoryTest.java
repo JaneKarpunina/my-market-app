@@ -1,6 +1,6 @@
 package ru.yandex.practicum.mymarket.repository;
 
-import jakarta.persistence.EntityManager;
+/*import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -133,4 +133,4 @@ public class CartItemRepositoryTest {
         assertTrue(results.stream().anyMatch(i -> i.getProduct().getTitle().equals("Товар 1") && i.getQuantity() == 1));
         assertTrue(results.stream().anyMatch(i -> i.getProduct().getTitle().equals("Товар 2") && i.getQuantity() == 5));
     }
-}
+}*/

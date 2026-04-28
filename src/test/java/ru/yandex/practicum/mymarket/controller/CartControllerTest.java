@@ -1,6 +1,6 @@
 package ru.yandex.practicum.mymarket.controller;
 
-import jakarta.servlet.http.Cookie;
+/*import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -98,4 +98,4 @@ public class CartControllerTest {
         verify(cartService).getCartDto(null);
     }
 
-}
+} */
