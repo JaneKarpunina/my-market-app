@@ -1,91 +1,92 @@
 package ru.yandex.practicum.mymarket.repository;
 
-/*import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
-import ru.yandex.practicum.mymarket.entity.Order;
-import ru.yandex.practicum.mymarket.entity.OrderItem;
-import ru.yandex.practicum.mymarket.entity.Product;
+import org.springframework.boot.data.r2dbc.test.autoconfigure.DataR2dbcTest;
+import org.springframework.r2dbc.core.DatabaseClient;
+import reactor.test.StepVerifier;
 
-import java.util.List;
-import java.util.Optional;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import static org.junit.jupiter.api.Assertions.*;
-
-@DataJpaTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@DataR2dbcTest
 public class OrderRepositoryTest {
 
     @Autowired
     private OrderRepository orderRepository;
 
     @Autowired
-    private OrderItemRepository orderItemRepository;
+    private DatabaseClient databaseClient;
 
-    @Autowired
-    private ProductRepository productRepository;
-
-    @Autowired
-    private EntityManager entityManager;
-
-    @Test
-    void test_findAllWithItems_ShouldLoadFullHierarchy() {
-        // 1. Подготовка данных через репозитории
-        Product product = new Product(null, "Клавиатура", "Механическая", "kb.jpg", 5000L);
-        product = productRepository.save(product);
-
-        Order order = new Order();
-        order = orderRepository.save(order);
-
-        OrderItem item = new OrderItem();
-        item.setOrder(order);
-        item.setProduct(product);
-        item.setQuantity(2);
-        orderItemRepository.save(item);
-
-        entityManager.clear();
-
-        // 2. Выполнение запроса
-        List<Order> result = orderRepository.findAllWithItems();
-
-        // 3. Проверки
-        assertFalse(result.isEmpty());
-        Order savedOrder = result.getFirst();
-
-        assertEquals(1, savedOrder.getItems().size());
-
-        OrderItem savedItem = savedOrder.getItems().getFirst();
-        assertEquals("Клавиатура", savedItem.getProduct().getTitle());
-        assertEquals(2, savedItem.getQuantity());
+    @BeforeEach
+    void setup() {
+        databaseClient.sql("DELETE FROM order_item").fetch().rowsUpdated().block();
+        databaseClient.sql("DELETE FROM orders").fetch().rowsUpdated().block();
+        databaseClient.sql("DELETE FROM product").fetch().rowsUpdated().block();
     }
 
     @Test
-    void test_getOrder_shouldLoadOrderWithItemsAndProducts() {
-        Product product = new Product(null, "Монитор", "4K", "mon.jpg", 30000L);
-        product = productRepository.save(product);
+    void findAllOrdersWithItems_Success() {
 
-        Order order = new Order();
-        order = orderRepository.save(order);
-        Long orderId = order.getId();
+        Long orderId = 100L;
+        Long productId = 1L;
+        insertTestData(orderId, productId, "Phone", 50000L, 2);
 
-        OrderItem item = new OrderItem();
-        item.setOrder(order);
-        item.setProduct(product);
-        item.setQuantity(1);
-        orderItemRepository.save(item);
-
-        entityManager.clear();
-
-        Optional<Order> result = orderRepository.getOrder(orderId);
-
-        assertTrue(result.isPresent());
-        Order foundOrder = result.get();
-
-        assertEquals(orderId, foundOrder.getId());
-        assertEquals(1, foundOrder.getItems().size());
-        assertEquals("Монитор", foundOrder.getItems().getFirst().getProduct().getTitle());
+        orderRepository.findAllOrdersWithItems()
+                .as(StepVerifier::create)
+                .assertNext(row -> {
+                    assertEquals(orderId, row.getOrderId());
+                    assertEquals(productId, row.getProductId());
+                    assertEquals("Phone", row.getTitle());
+                    assertEquals(2, row.getQuantity());
+                    assertEquals(50000L, row.getPrice());
+                })
+                .verifyComplete();
     }
 
-}*/
+    @Test
+    void getOrder_ReturnsSpecificOrder() {
+
+        insertTestData(100L, 1L, "Laptop", 70000L, 1);
+        insertTestData(200L, 2L, "Mouse", 1000L, 3);
+
+        orderRepository.getOrder(100L)
+                .as(StepVerifier::create)
+                .assertNext(row -> {
+                    assertEquals(100L, row.getOrderId());
+                    assertEquals("Laptop", row.getTitle());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void getOrder_ReturnsEmptyIfNotFound() {
+        orderRepository.getOrder(999L)
+                .as(StepVerifier::create)
+                .verifyComplete();
+    }
+
+    private void insertTestData(Long orderId, Long productId, String title, Long price, int quantity) {
+
+        databaseClient.sql("INSERT INTO orders (id) VALUES (:id)")
+                .bind("id", orderId).then().block();
+
+        databaseClient.sql("""
+            INSERT INTO product (id, title, description, img_path, price)
+            VALUES (:id, :title, 'Desc for ' || :title, 'img_' || :id || '.jpg', :price)
+            """)
+                .bind("id", productId)
+                .bind("title", title)
+                .bind("price", price)
+                .then().block();
+
+        databaseClient.sql("""
+            INSERT INTO order_item (order_id, product_id, quantity)
+            VALUES (:oid, :pid, :q)
+            """)
+                .bind("oid", orderId)
+                .bind("pid", productId)
+                .bind("q", quantity)
+                .then().block();
+    }
+}
