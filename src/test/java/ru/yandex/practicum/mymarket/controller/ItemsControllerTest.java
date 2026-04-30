@@ -1,144 +1,107 @@
 package ru.yandex.practicum.mymarket.controller;
 
-/*import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
+import org.springframework.http.MediaType;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.reactive.function.BodyInserters;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.service.ItemsService;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(ItemsController.class)
+@WebFluxTest(ItemsController.class)
 public class ItemsControllerTest {
 
     @Autowired
-    MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockitoBean
     ItemsService itemsService;
 
+    private final String cartId = "test-cart";
+
     @Test
-    void test_changeItemQuantity_shouldInvokeServiceAndRedirectWithParams() throws Exception {
+    void changeItemQuantity_RedirectWithParams() {
+        when(itemsService.changeItemsCount(anyLong(), anyString(), any(ServerHttpResponse.class), anyString()))
+                .thenReturn(Mono.empty());
 
-        Long id = 1L;
-        String action = "PLUS";
-        String search = "java";
-        String sort = "PRICE";
-        int page = 2;
-        int size = 10;
-        String cartId = "uuid-123";
+        webTestClient.post()
+                .uri("/items")
+                .cookie("cartId", cartId)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters.fromFormData("id", "1")
+                        .with("action", "PLUS")
+                        .with("search", "phone")
+                        .with("sort", "PRICE")
+                        .with("pageNumber", "2")
+                        .with("pageSize", "10"))
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().valueEquals("Location", "/items?search=phone&sort=PRICE&pageNumber=2&pageSize=10");
 
-        mockMvc.perform(post("/items")
-                        .param("id", id.toString())
-                        .param("action", action)
-                        .param("search", search)
-                        .param("sort", sort)
-                        .param("pageNumber", String.valueOf(page))
-                        .param("pageSize", String.valueOf(size))
-                        .cookie(new Cookie("cartId", cartId)))
-                .andExpect(status().is3xxRedirection());
-
-        verify(itemsService).changeItemsCount(
-                eq(id),
-                eq(action),
-                any(HttpServletResponse.class),
-                eq(cartId)
-        );
+        verify(itemsService).changeItemsCount(eq(1L), eq("PLUS"), any(), eq(cartId));
     }
 
     @Test
-    void test_changeItemQuantity_withDefaults_shouldRedirectWithDefaultParams() throws Exception {
-        // Тест на значения по умолчанию (search="", sort=NO, page=1, size=5)
-        mockMvc.perform(post("/items")
-                        .param("id", "5")
-                        .param("action", "MINUS"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/items?search=&sort=NO&pageNumber=1&pageSize=5"));
-
-        verify(itemsService).changeItemsCount(eq(5L), eq("MINUS"), any(), any());
-    }
-
-    @Test
-    void test_getItem_shouldReturnItemViewWithCorrectModel() throws Exception {
-        // Подготовка данных
-        Long itemId = 1L;
-        String cartId = "cart-123";
+    void getItem_ShouldReturnItemView() {
         ItemDto mockItem = new ItemDto();
-        mockItem.setId(itemId);
-        mockItem.setTitle("Тестовый товар");
-        mockItem.setCount(2);
+        mockItem.setId(1L);
+        mockItem.setTitle("Test Product");
 
-        when(itemsService.getItemWithQuantity(itemId, cartId)).thenReturn(mockItem);
+        when(itemsService.getItemWithQuantity(1L, cartId)).thenReturn(Mono.just(mockItem));
 
-        mockMvc.perform(get("/items/{id}", itemId)
-                        .cookie(new Cookie("cartId", cartId)))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"))
-                .andExpect(model().attribute("item", mockItem))
-                .andExpect(model().attributeExists("item"));
+        webTestClient.get()
+                .uri("/items/1")
+                .cookie("cartId", cartId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .consumeWith(result -> {
+                    String body = result.getResponseBody();
+                    assertNotNull(body);
+                    assertTrue(body.contains("Test Product"));
+                });
+
+        verify(itemsService).getItemWithQuantity(1L, cartId);
     }
 
     @Test
-    void test_getItem_withoutCookie_shouldStillReturnView() throws Exception {
-        Long itemId = 99L;
-        ItemDto mockItem = new ItemDto();
-        mockItem.setId(itemId);
-
-        when(itemsService.getItemWithQuantity(itemId, null)).thenReturn(mockItem);
-
-        mockMvc.perform(get("/items/{id}", itemId))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"))
-                .andExpect(model().attribute("item", mockItem));
-    }
-
-    @Test
-    void test_changeItemQuantity_shouldUpdateAndReturnItemView() throws Exception {
-        // Данные
-        Long itemId = 1L;
-        String action = "PLUS";
-        String cartId = "uuid-abc";
+    void changeItemQuantity_SingleItem_ReturnRendering() {
         ItemDto updatedItem = new ItemDto();
-        updatedItem.setId(itemId);
+        updatedItem.setId(1L);
         updatedItem.setCount(5);
 
-        doNothing().when(itemsService).changeItemsCount(eq(itemId), eq(action), any(HttpServletResponse.class), eq(cartId));
-        when(itemsService.getItemWithQuantity(itemId, cartId)).thenReturn(updatedItem);
+        when(itemsService.changeItemsCount(anyLong(), anyString(), any(ServerHttpResponse.class), anyString()))
+                .thenReturn(Mono.empty());
+        when(itemsService.getItemWithQuantity(1L, cartId)).thenReturn(Mono.just(updatedItem));
 
-        // Выполнение запроса
-        mockMvc.perform(post("/items/{id}", itemId)
-                        .param("action", action)
-                        .cookie(new Cookie("cartId", cartId)))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"))
-                .andExpect(model().attribute("item", updatedItem));
-
-        verify(itemsService).changeItemsCount(eq(itemId), eq(action), any(), eq(cartId));
-        verify(itemsService).getItemWithQuantity(itemId, cartId);
-
+        webTestClient.post()
+                .uri("/items/1")
+                .cookie("cartId", cartId)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters.fromFormData("action", "PLUS"))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .consumeWith(result -> {
+                    String body = result.getResponseBody();
+                    assertNotNull(body);
+                    assertTrue(body.contains("5"));
+                });
+        verify(itemsService).changeItemsCount(eq(1L), eq("PLUS"), any(), eq(cartId));
+        verify(itemsService).getItemWithQuantity(1L, cartId);
     }
 
-    @Test
-    void test_changeItemQuantity_withoutCookie() throws Exception {
-        Long itemId = 2L;
-        ItemDto item = new ItemDto();
 
-        when(itemsService.getItemWithQuantity(itemId, null)).thenReturn(item);
 
-        mockMvc.perform(post("/items/{id}", itemId)
-                        .param("action", "MINUS"))
-                .andExpect(status().isOk())
-                .andExpect(model().attributeExists("item"));
 
-        verify(itemsService).changeItemsCount(eq(itemId), eq("MINUS"), any(), isNull());
-    }
-}*/
+}

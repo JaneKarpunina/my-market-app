@@ -1,62 +1,62 @@
 package ru.yandex.practicum.mymarket.controller;
 
-/*import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.reactive.function.BodyInserters;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.service.AddItemService;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
-@WebMvcTest(AddItemController.class)
+@WebFluxTest(AddItemController.class)
 public class AddItemControllerTest {
 
     @Autowired
-    MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockitoBean
     AddItemService addItemService;
 
     @Test
-    void test_addProducts() throws Exception {
-
-        mockMvc.perform(get("/add-item"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType("text/html;charset=UTF-8"));
+    void addProducts_ReturnView() {
+        webTestClient.get()
+                .uri("/add-item?success=false")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody();
     }
 
     @Test
-    void test_addProduct_shouldSaveItemAndRedirect() throws Exception {
+    void addProduct_Success_Redirect() {
 
-        MockMultipartFile imageFile = new MockMultipartFile(
-                "image",
-                "test.jpg",
-                "image/jpeg",
-                "some-image-content".getBytes()
-        );
+        when(addItemService.addItem(anyString(), anyString(), anyString(), any(FilePart.class)))
+                .thenReturn(Mono.empty());
 
-        mockMvc.perform(multipart("/item/add")
-                        .file(imageFile)
-                        .param("title", "Новый товар")
-                        .param("description", "Описание товара")
-                        .param("price", "1500"))
-                .andExpect(status().is3xxRedirection()) // Проверяем редирект
-                .andExpect(redirectedUrl("/add-item"))
-                .andExpect(flash().attribute("successMessage", "Товар успешно добавлен!"));
+        MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
+        bodyBuilder.part("title", "Sony TV");
+        bodyBuilder.part("description", "Best 4K TV");
+        bodyBuilder.part("price", "50000");
+        bodyBuilder.part("image", "fake-image-content".getBytes())
+                .filename("test.jpg")
+                .contentType(MediaType.IMAGE_JPEG);
 
-        verify(addItemService).addItem(
-                eq("Новый товар"),
-                eq("Описание товара"),
-                eq("1500"),
-                any()
-        );
+        webTestClient.post()
+                .uri("/item/add")
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(bodyBuilder.build()))
+                .exchange()
+                .expectStatus().is3xxRedirection() // Проверяем редирект
+                .expectHeader().valueEquals("Location", "/add-item?success=true");
     }
 
-}*/
+
+
+}
