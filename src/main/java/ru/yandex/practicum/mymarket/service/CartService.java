@@ -2,10 +2,9 @@ package ru.yandex.practicum.mymarket.service;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.CartDto;
-import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.entity.Cart;
-import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.CartRepository;
 
@@ -27,49 +26,50 @@ public class CartService {
     }
 
     @Transactional
-    public CartDto getCartDto(String cartId) {
+    public Mono<CartDto> getCartDto(String cartId) {
 
         if (cartId == null || cartId.isEmpty()) {
-           return new CartDto(List.of(), 0L);
+            return Mono.just(new CartDto(List.of(), 0L));
         }
 
-        Cart savedCart = cartRepository.findById(cartId).orElse(null);
+        return cartRepository.findById(cartId)
+                .switchIfEmpty(Mono.defer(() -> {
+                    Cart newCart = new Cart();
+                    newCart.setId(cartId);
+                    return cartRepository.save(newCart);
+                }))
+                .flatMap(cart -> cartRepository.findItemsForCartId(cartId)
+                        .collectList()
+                        .map(items -> {
+                            long total = items.stream()
+                                    .mapToLong(item -> item.getPrice() * item.getCount())
+                                    .sum();
+                            return new CartDto(items, total);
+                        })
+                );
 
-        if (savedCart == null) {
-            Cart cart = new Cart();
-            cart.setId(cartId);
-            cartRepository.save(cart);
-            return new CartDto(List.of(), 0L);
-        }
-
-        List<ItemDto> itemDtos = cartRepository.findItemsForCartId(cartId);
-
-        long total = 0L;
-        for (ItemDto itemDto : itemDtos) {
-           total += itemDto.getPrice() * itemDto.getCount();
-        }
-        return new CartDto(itemDtos, total);
     }
 
     @Transactional
-    public void changeItemQuantity(Long id, String action, String cartId) {
+    public Mono<Void> changeItemQuantity(Long id, String action, String cartId) {
 
-        CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cartId, id).orElse(null);
+        return cartItemRepository.findByCartIdAndProductId(cartId, id)
+                .flatMap(cartItem -> {
+                    int quantity = cartItem.getQuantity();
+                    if (quantity == 1 && MINUS.equals(action) || DELETE.equals(action)) {
+                        return cartItemRepository.delete(cartItem);
+                    }
+                    else if (quantity > 1 && MINUS.equals(action)) {
+                        cartItem.setQuantity(quantity - 1);
+                        return cartItemRepository.save(cartItem);
+                    }
+                    else if (quantity < Integer.MAX_VALUE && PLUS.equals(action)) {
+                        cartItem.setQuantity(quantity + 1);
+                        return cartItemRepository.save(cartItem);
+                    }
 
-        if (cartItem == null) {
-            return;
-        }
-
-        int quantity = cartItem.getQuantity();
-        if (quantity == 1 && MINUS.equals(action) || DELETE.equals(action)) {
-            cartItemRepository.delete(cartItem);
-        }
-        else if (quantity > 1 && MINUS.equals(action)) {
-            cartItemRepository.updateQuantity(cartItem.getId(), quantity - 1);
-        }
-        else if (quantity < Integer.MAX_VALUE && PLUS.equals(action)) {
-            cartItemRepository.updateQuantity(cartItem.getId(), quantity + 1);
-        }
-
+                    return Mono.empty();
+                })
+                .then();
     }
 }

@@ -1,28 +1,29 @@
 package ru.yandex.practicum.mymarket.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
+import ru.yandex.practicum.mymarket.dto.OrderFlatRow;
 import ru.yandex.practicum.mymarket.entity.Order;
 
-import java.util.List;
-import java.util.Optional;
-
 @Repository
-public interface OrderRepository extends JpaRepository<Order, String> {
+public interface OrderRepository extends ReactiveCrudRepository<Order, String> {
 
     @Query("""
-            SELECT o FROM Order o
-            JOIN FETCH o.items oi
-            JOIN FETCH oi.product
+            SELECT o.id as order_id, oi.quantity, p.id as product_id, p.title, p.price
+            FROM ORDERS o
+            LEFT JOIN ORDER_ITEM oi ON o.id = oi.order_id
+            LEFT JOIN PRODUCT p ON oi.product_id = p.id
             """)
-    List<Order> findAllWithItems();
+    Flux<OrderFlatRow> findAllOrdersWithItems();
 
     @Query("""
-            SELECT o FROM Order o
-            JOIN FETCH o.items oi
-            JOIN FETCH oi.product
+            SELECT o.id as order_id, oi.quantity, p.id as product_id, p.title, p.price
+            FROM ORDERS o
+            LEFT JOIN ORDER_ITEM oi ON o.id = oi.order_id
+            LEFT JOIN PRODUCT p ON oi.product_id = p.id
             WHERE o.id = :id
             """)
-    Optional<Order> getOrder(Long id);
+    Flux<OrderFlatRow> getOrder(Long id);
 }

@@ -7,10 +7,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import ru.yandex.practicum.mymarket.dto.OrderDto;
+import org.springframework.web.reactive.result.view.Rendering;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.service.OrdersService;
-
-import java.util.List;
 
 @Controller
 @RequestMapping("/orders")
@@ -23,25 +22,26 @@ public class OrdersController {
     }
 
     @GetMapping
-    public String getOrders(Model model) {
-
-       List<OrderDto> orders = ordersService.getOrders();
-
-       model.addAttribute("orders", orders);
-
-       return "orders";
-
+    public Mono<Rendering> getOrders() {
+        return ordersService.getOrders()
+                .collectList()
+                .map(orders -> Rendering.view("orders")
+                        .modelAttribute("orders", orders)
+                        .build());
     }
 
     @GetMapping("/{id}")
-    public String getOrder(@PathVariable Long id,
+    public Mono<String> getOrder(@PathVariable Long id,
                            @RequestParam(value = "newOrder", required = false, defaultValue = "false") boolean newOrder,
                            Model model) {
 
-        OrderDto orderDto = ordersService.getOrder(id);
+        return ordersService.getOrder(id)
+                .flatMap(orderDto -> {
+                    model.addAttribute("order", orderDto);
+                    model.addAttribute("newOrder", newOrder);
+                    return Mono.just("order");
+                });
 
-        model.addAttribute("order", orderDto);
-        model.addAttribute("newOrder", newOrder);
-        return "order";
+
     }
 }

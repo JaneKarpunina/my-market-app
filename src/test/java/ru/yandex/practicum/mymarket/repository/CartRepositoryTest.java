@@ -1,77 +1,69 @@
 package ru.yandex.practicum.mymarket.repository;
 
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
-import ru.yandex.practicum.mymarket.dto.ItemDto;
-import ru.yandex.practicum.mymarket.entity.Cart;
-import ru.yandex.practicum.mymarket.entity.CartItem;
-import ru.yandex.practicum.mymarket.entity.Product;
-
-import java.util.List;
+import org.springframework.boot.data.r2dbc.test.autoconfigure.DataR2dbcTest;
+import org.springframework.r2dbc.core.DatabaseClient;
+import reactor.test.StepVerifier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DataJpaTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@DataR2dbcTest
 public class CartRepositoryTest {
 
     @Autowired
     private CartRepository cartRepository;
 
     @Autowired
-    private ProductRepository productRepository;
+    private DatabaseClient databaseClient;
 
-    @Autowired
-    private CartItemRepository cartItemRepository;
-
-    @Test
-    void test_findItemsForCartId_shouldReturnCorrectDtos() {
-        Product product = new Product(null, "Кофе", "Арабика", "coffee.jpg", 500L);
-        product = productRepository.save(product);
-
-        String cartId = "cart-unique-id";
-        Cart cart = new Cart();
-        cart.setId(cartId);
-        cartRepository.save(cart);
-
-        CartItem cartItem = new CartItem();
-        cartItem.setCart(cart);
-        cartItem.setProduct(product);
-        cartItem.setQuantity(3);
-        cartItemRepository.save(cartItem);
-
-        List<ItemDto> result = cartRepository.findItemsForCartId(cartId);
-
-        assertEquals(1, result.size());
-        ItemDto dto = result.getFirst();
-
-        assertEquals("Кофе", dto.getTitle());
-        assertEquals(500L, dto.getPrice());
-        assertEquals(3, dto.getCount());
-        assertEquals(product.getId(), dto.getId());
+    @BeforeEach
+    void setup() {
+        databaseClient.sql("DELETE FROM cart_item").fetch().rowsUpdated().block();
+        databaseClient.sql("DELETE FROM product").fetch().rowsUpdated().block();
+        databaseClient.sql("DELETE FROM cart").fetch().rowsUpdated().block();
     }
 
     @Test
-    void test_findItemsForCartId_shouldNotReturnItemsFromOtherCarts() {
-        Product p = productRepository.save(new Product(null, "Чай", "Зеленый", "tea.jpg", 200L));
-        Cart cart1 = new Cart();
-        cart1.setId("cart-1");
-        Cart cart2 = new Cart();
-        cart2.setId("cart-2");
-        cart1 = cartRepository.save(cart1);
-        cart2 = cartRepository.save(cart2);
+    void findItemsForCartId_Success() {
 
-        // Кладем товар только в первую корзину
-        cartItemRepository.save(new CartItem(null, cart1, p, 10));
+        String cartId = "test-cart";
 
-        // Запрашиваем данные для второй корзины
-        List<ItemDto> result = cartRepository.findItemsForCartId("cart-2");
+        insertTestData(cartId);
 
-        // Должно быть пусто
-        assertTrue(result.isEmpty());
+        cartRepository.findItemsForCartId(cartId)
+                .as(StepVerifier::create)
+                .assertNext(item -> {
+                    assertEquals("Apple", item.getTitle());
+                    assertEquals(5, item.getCount());
+                })
+                .assertNext(item -> {
+                    assertEquals("Banana", item.getTitle());
+                    assertEquals(10, item.getCount());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void findItemsForCartId_EmptyIfNoCart() {
+        cartRepository.findItemsForCartId("non-existent")
+                .as(StepVerifier::create)
+                .verifyComplete(); // Должен быть пустой поток
+    }
+
+    private void insertTestData(String cartId) {
+        databaseClient.sql("INSERT INTO cart (id) VALUES (:id)").bind("id", cartId).then().block();
+
+        databaseClient.sql("INSERT INTO product (id, title, price, description, img_path) " +
+                "VALUES (1, 'Apple', 100, 'desc', 'path1')").then().block();
+        databaseClient.sql("INSERT INTO product (id, title, price, description, img_path)" +
+                " VALUES (2, 'Banana', 50, 'desc', 'path2')").then().block();
+
+        databaseClient.sql("INSERT INTO cart_item (cart_id, product_id, quantity) VALUES (:c, 1, 5)")
+                .bind("c", cartId).then().block();
+        databaseClient.sql("INSERT INTO cart_item (cart_id, product_id, quantity) VALUES (:c, 2, 10)")
+                .bind("c", cartId).then().block();
     }
 }

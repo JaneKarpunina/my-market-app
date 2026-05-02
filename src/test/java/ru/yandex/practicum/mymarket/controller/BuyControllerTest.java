@@ -1,53 +1,57 @@
 package ru.yandex.practicum.mymarket.controller;
 
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.service.OrdersService;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(BuyController.class)
-public class BuyControllerTest {
+@WebFluxTest(BuyController.class)
+class BuyControllerTest {
 
     @Autowired
-    MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockitoBean
-    OrdersService ordersService;
+    private OrdersService ordersService;
 
     @Test
-    void test_buy_shouldCreateOrderAndRedirectToOrderDetails() throws Exception {
+    void buy_ShouldSaveOrderAndRedirect() {
+
         String cartId = "test-cart-id";
         Long generatedOrderId = 123L;
 
-        when(ordersService.saveOrder(eq(cartId), any(HttpServletResponse.class)))
-                .thenReturn(generatedOrderId);
+        when(ordersService.saveOrder(eq(cartId), any(ServerHttpResponse.class)))
+                .thenReturn(Mono.just(generatedOrderId));
 
-        mockMvc.perform(post("/buy")
-                        .cookie(new Cookie("cartId", cartId)))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/orders/123?newOrder=true"));
+        webTestClient.post()
+                .uri("/buy")
+                .cookie("cartId", cartId)
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().valueEquals("Location", "/orders/123?newOrder=true");
+
+        verify(ordersService).saveOrder(eq(cartId), any(ServerHttpResponse.class));
     }
 
     @Test
-    void test_buy_withoutCookie() throws Exception {
+    void buy_WithoutCookie() {
         Long generatedOrderId = 456L;
 
-        when(ordersService.saveOrder(eq(null), any(HttpServletResponse.class)))
-                .thenReturn(generatedOrderId);
+        when(ordersService.saveOrder(isNull(), any(ServerHttpResponse.class)))
+                .thenReturn(Mono.just(generatedOrderId));
 
-        mockMvc.perform(post("/buy"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/orders/456?newOrder=true"));
+        webTestClient.post()
+                .uri("/buy")
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().valueEquals("Location", "/orders/456?newOrder=true");
     }
 }

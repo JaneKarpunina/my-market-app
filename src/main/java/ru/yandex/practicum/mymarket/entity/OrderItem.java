@@ -1,29 +1,30 @@
 package ru.yandex.practicum.mymarket.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
-@Getter
-@Setter
-@Entity
-@Table(name = "order_item")
+@Data
+@Table(name = "ORDER_ITEM")
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = "order")
-@EqualsAndHashCode(exclude = "order")
 public class OrderItem {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "order_id", nullable = false)
-    private Order order;
+    @Column("ORDER_ID")
+    private Long orderId;
 
-    @ManyToOne
-    @JoinColumn(name = "product_id", nullable = false)
-    private Product product;
+    @Column("PRODUCT_ID")
+    private Long productId;
 
     private int quantity;
+
+    @Version
+    private Long version;
 }

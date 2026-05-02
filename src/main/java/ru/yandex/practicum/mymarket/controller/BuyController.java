@@ -1,11 +1,12 @@
 package ru.yandex.practicum.mymarket.controller;
 
-import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.util.UriComponentsBuilder;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.service.OrdersService;
 
 @Controller
@@ -20,16 +21,19 @@ public class BuyController {
 
 
     @PostMapping
-    public String buy(@CookieValue(value = "cartId", required = false) String cartId,
-                      HttpServletResponse response) {
+    public Mono<String> buy(@CookieValue(value = "cartId", required = false) String cartId,
+                            ServerHttpResponse response) {
 
-        Long id = ordersService.saveOrder(cartId, response);
+        return ordersService.saveOrder(cartId, response)
+                .map(id -> {
+                    // 2. Строим URL для редиректа
+                    String url = UriComponentsBuilder.fromPath("/orders/{id}")
+                            .queryParam("newOrder", true)
+                            .buildAndExpand(id)
+                            .toUriString();
 
-        String url = UriComponentsBuilder.fromPath("/orders/{id}")
-                .queryParam("newOrder", true)
-                .buildAndExpand(id)
-                .toUriString();
-
-        return "redirect:" + url;
+                    // 3. Возвращаем строку с префиксом redirect:
+                    return "redirect:" + url;
+                });
     }
 }

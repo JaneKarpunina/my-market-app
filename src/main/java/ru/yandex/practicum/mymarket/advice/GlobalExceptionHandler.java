@@ -5,6 +5,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.exception.NumberOutsideOfRangeException;
 import ru.yandex.practicum.mymarket.exception.UnsupportedMediaTypeException;
 
@@ -13,8 +14,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({MaxUploadSizeExceededException.class, NumberOutsideOfRangeException.class,
             UnsupportedMediaTypeException.class, IllegalArgumentException.class})
-    public String handleExceptionProductUpload(RuntimeException ex, Model model) {
+    public Mono<String> handleExceptionProductUpload(Exception ex, Model model) {
         model.addAttribute("errorMessage", ex.getMessage());
-        return "addItem";
+
+        return Mono.just("addItem");
     }
 }

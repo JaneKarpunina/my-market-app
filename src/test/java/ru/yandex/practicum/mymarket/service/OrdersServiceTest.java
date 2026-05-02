@@ -1,14 +1,18 @@
 package ru.yandex.practicum.mymarket.service;
 
-import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.dto.OrderDto;
+import ru.yandex.practicum.mymarket.dto.OrderFlatRow;
 import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.entity.Order;
 import ru.yandex.practicum.mymarket.entity.OrderItem;
@@ -19,6 +23,8 @@ import ru.yandex.practicum.mymarket.repository.OrderRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -35,7 +41,8 @@ public class OrdersServiceTest extends BaseTest {
     @MockitoBean
     private OrderItemRepository orderItemRepository;
 
-    private final Long ORDER_ID = 1L;
+    @MockitoBean
+    private ServerHttpResponse response;
 
     @BeforeEach
     void resetMocks() {
@@ -46,135 +53,104 @@ public class OrdersServiceTest extends BaseTest {
     }
 
     @Test
-    void test_getOrders_shouldReturnEmptyList_whenNoOrdersExist() {
-        when(orderRepository.findAllWithItems()).thenReturn(new ArrayList<>());
+    void getOrders_Success() {
 
-        List<OrderDto> result = ordersService.getOrders();
+        OrderFlatRow row1 = new OrderFlatRow(1L, 100L, 1, 500L, "Product A");
+        OrderFlatRow row2 = new OrderFlatRow(2L, 100L, 2, 250L, "Product B"); // Заказ 100, Товар B (итого 500+500=1000)
+        OrderFlatRow row3 = new OrderFlatRow(3L, 200L, 1, 300L, "Product C"); // Заказ 200, Товар C (итого 300)
 
-        assertTrue(result.isEmpty());
-        verify(orderRepository).findAllWithItems();
+        when(orderRepository.findAllOrdersWithItems()).thenReturn(Flux.just(row1, row2, row3));
+
+        StepVerifier.create(ordersService.getOrders())
+                .assertNext(order -> {
+                    assertEquals(100L, order.getId());
+                    assertEquals(2, order.getItems().size());
+                    assertEquals(1000L, order.getTotalSum());
+                })
+                .assertNext(order -> {
+                    assertEquals(200L, order.getId());
+                    assertEquals(1, order.getItems().size());
+                    assertEquals(300L, order.getTotalSum());
+                })
+                .verifyComplete();
+
     }
 
     @Test
-    void test_getOrders_shouldCorrectlyMapOrdersAndCalculateTotalSum() {
-        Product product = new Product();
-        product.setId(10L);
-        product.setTitle("Test Product");
-        product.setPrice(200L);
+    void getOrders_Empty() {
+        when(orderRepository.findAllOrdersWithItems()).thenReturn(Flux.empty());
 
-        OrderItem orderItem = new OrderItem();
-        orderItem.setProduct(product);
-        orderItem.setQuantity(3); // 200 * 3 = 600
-
-        Order order = new Order();
-        order.setId(1L);
-        orderItem.setOrder(order);
-        order.setItems(List.of(orderItem));
-
-        when(orderRepository.findAllWithItems()).thenReturn(List.of(order));
-
-        // Вызов метода
-        List<OrderDto> result = ordersService.getOrders();
-
-        assertEquals(1, result.size());
-        verify(orderRepository).findAllWithItems();
-        OrderDto dto = result.getFirst();
-
-        assertEquals(1L, dto.getId());
-        assertEquals(600L, dto.getTotalSum()); // Проверка расчета суммы
-        assertEquals(1, dto.getItems().size());
-
-        ItemDto itemDto = dto.getItems().getFirst();
-        assertEquals(10L, itemDto.getId());
-        assertEquals("Test Product", itemDto.getTitle());
-        assertEquals(200L, itemDto.getPrice());
-        assertEquals(3, itemDto.getCount());
+        StepVerifier.create(ordersService.getOrders())
+                .verifyComplete();
     }
 
     @Test
-    void test_getOrder_whenOrderNotFound_shouldReturnEmptyOrderDto() {
+    void getOrder_Success() {
+        Long orderId = 1L;
+        OrderFlatRow row1 = new OrderFlatRow(10L, orderId, 2, 100L,  "Product A"); // 2 * 100 = 200
+        OrderFlatRow row2 = new OrderFlatRow(20L, orderId, 1, 500L, "Product B"); // 1 * 500 = 500
 
-        when(orderRepository.getOrder(ORDER_ID)).thenReturn(Optional.empty());
+        when(orderRepository.getOrder(orderId)).thenReturn(Flux.just(row1, row2));
 
-        OrderDto result = ordersService.getOrder(ORDER_ID);
+        StepVerifier.create(ordersService.getOrder(orderId))
+                .assertNext(orderDto -> {
+                    assertEquals(orderId, orderDto.getId());
+                    assertEquals(2, orderDto.getItems().size());
+                    assertEquals(700L, orderDto.getTotalSum()); // 200 + 500
 
-        verify(orderRepository).getOrder(ORDER_ID);
-
-        assertNotNull(result);
-        assertNull(result.getId());
-        assertNull(result.getItems());
+                    ItemDto firstItem = orderDto.getItems().getFirst();
+                    assertEquals("Product A", firstItem.getTitle());
+                    assertEquals(2, firstItem.getCount());
+                })
+                .verifyComplete();
     }
 
     @Test
-    void test_getOrder_whenOrderExists_shouldMapCorrectlyAndCalculateTotal() {
+    void getOrder_NotFound() {
+        Long orderId = 999L;
+        when(orderRepository.getOrder(orderId)).thenReturn(Flux.empty());
 
-        Product product = new Product();
-        product.setId(50L);
-        product.setTitle("Java Book");
-        product.setPrice(1500L);
-
-        OrderItem item = new OrderItem();
-        item.setProduct(product);
-        item.setQuantity(2); // 1500 * 2 = 3000
-
-        Order order = new Order();
-        order.setId(ORDER_ID);
-        item.setOrder(order);
-        order.setItems(List.of(item));
-
-        when(orderRepository.getOrder(ORDER_ID)).thenReturn(Optional.of(order));
-
-        OrderDto result = ordersService.getOrder(ORDER_ID);
-
-        verify(orderRepository).getOrder(ORDER_ID);
-
-        assertEquals(ORDER_ID, result.getId());
-        assertEquals(3000L, result.getTotalSum());
-        assertEquals(1, result.getItems().size());
-
-        ItemDto itemDto = result.getItems().getFirst();
-        assertEquals("Java Book", itemDto.getTitle());
-        assertEquals(2, itemDto.getCount());
-        assertEquals(1500L, itemDto.getPrice());
+        StepVerifier.create(ordersService.getOrder(orderId))
+                .assertNext(orderDto -> {
+                    assertNull(orderDto.getId());
+                    assertNull(orderDto.getItems());
+                    assertEquals(0L, orderDto.getTotalSum());
+                })
+                .verifyComplete();
     }
 
     @Test
-    void test_saveOrder_shouldCreateOrderAndClearCart() {
-        String cartId = "test-cart-id";
-        MockHttpServletResponse response = new MockHttpServletResponse();
+    void saveOrder_Success() {
+        String cartId = "test-cart";
+        Long savedOrderId = 10L;
 
-        Product product = new Product();
-        product.setId(1L);
+        Order orderEntity = new Order();
+        orderEntity.setId(savedOrderId);
 
-        CartItem cartItem = new CartItem();
-        cartItem.setProduct(product);
-        cartItem.setQuantity(2);
+        CartItem ci1 = new CartItem(1L, cartId, 101L, 2, 0L);
+        CartItem ci2 = new CartItem(2L, cartId, 102L, 1, 0L);
 
-        Order savedOrder = new Order();
-        savedOrder.setId(100L);
+        when(orderRepository.save(any(Order.class))).thenReturn(Mono.just(orderEntity));
+        when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.just(ci1, ci2));
 
-        when(cartItemRepository.findByCartId(cartId)).thenReturn(List.of(cartItem));
-        when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
+        when(orderItemRepository.saveAll(anyIterable())).thenReturn(Flux.just(new OrderItem(), new OrderItem()));
 
-        Long orderId = ordersService.saveOrder(cartId, response);
+        when(cartRepository.deleteById(cartId)).thenReturn(Mono.empty());
 
-        assertEquals(100L, orderId);
+        StepVerifier.create(ordersService.saveOrder(cartId, response))
+                .expectNext(savedOrderId)
+                .verifyComplete();
 
-        // 1. Проверяем сохранение элементов заказа
-        verify(orderItemRepository).saveAll(argThat(items -> {
-            List<OrderItem> list = (List<OrderItem>) items;
-            return list.size() == 1 &&
-                    list.getFirst().getQuantity() == 2 &&
-                    list.getFirst().getOrder().getId().equals(100L);
+        verify(orderItemRepository).saveAll((Iterable<OrderItem>) argThat(items -> {
+            List<OrderItem> list = StreamSupport.stream(((Iterable<OrderItem>) items).spliterator(), false)
+                    .collect(Collectors.toList());
+
+            return list.size() == 2 && list.stream().allMatch(oi -> oi.getOrderId().equals(savedOrderId));
         }));
 
-        // 2. Проверяем удаление корзины
         verify(cartRepository).deleteById(cartId);
-
-        // 3. Проверяем удаление Cookie
-        Cookie cookie = response.getCookie("cartId");
-        assertNotNull(cookie);
-        assertEquals(0, cookie.getMaxAge());
-        assertNull(cookie.getValue());
+        verify(response).addCookie(argThat(cookie ->
+                cookie.getName().equals("cartId") && cookie.getMaxAge().isZero()
+        ));
     }
 }

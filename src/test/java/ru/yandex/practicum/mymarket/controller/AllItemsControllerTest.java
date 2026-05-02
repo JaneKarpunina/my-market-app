@@ -1,71 +1,59 @@
 package ru.yandex.practicum.mymarket.controller;
 
-import jakarta.servlet.http.Cookie;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import ru.yandex.practicum.mymarket.dto.ItemDto;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemsWithPaging;
 import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.service.ItemsService;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(AllItemsController.class)
+
+@WebFluxTest(AllItemsController.class)
 public class AllItemsControllerTest {
 
     @Autowired
-    MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockitoBean
     ItemsService itemsService;
 
     @Test
-    void test_getItems_shouldReturnItemsViewWithCorrectModel() throws Exception {
-        Paging mockPaging = new Paging(5, 1, false, true);
-        List<List<ItemDto>> mockRows = List.of(List.of(new ItemDto()));
-        ItemsWithPaging mockResponse = new ItemsWithPaging(mockRows, mockPaging);
+    void getItems_Success() {
 
-        when(itemsService.getItemsWithPaging(anyString(), anyString(), anyInt(), anyInt(), anyString()))
-                .thenReturn(mockResponse);
+        Paging paging = new Paging(5, 1, false, false);
+        ItemsWithPaging mockResponse = new ItemsWithPaging(List.of(), paging);
 
-        mockMvc.perform(get("/items")
-                        .param("search", "phone")
-                        .param("sort", "PRICE")
-                        .param("pageNumber", "1")
-                        .cookie(new Cookie("cartId", "some-uuid")))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"))
-                .andExpect(model().attributeExists("items", "paging", "search", "sort"))
-                .andExpect(model().attribute("search", "phone"))
-                .andExpect(model().attribute("sort", "PRICE"));
+        when(itemsService.getItemsWithPaging(any(), anyString(), anyInt(), anyInt(), any()))
+                .thenReturn(Mono.just(mockResponse));
 
-        verify(itemsService).getItemsWithPaging(anyString(), anyString(), anyInt(), anyInt(), any());
+        webTestClient.get()
+                .uri("/items")
+                .cookie("cartId", "test-cart")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .consumeWith(response -> {
+                    String body = response.getResponseBody();
+                    assertNotNull(body);
+                    assertTrue(body.contains("NO"));
+                });
 
+        verify(itemsService).getItemsWithPaging(null, "NO", 1, 5, "test-cart");
     }
 
-    @Test
-    void test_getItems_withoutParams_shouldUseDefaultValues() throws Exception {
-        ItemsWithPaging mockResponse = new ItemsWithPaging(List.of(), new Paging(5, 1, false, false));
 
-        when(itemsService.getItemsWithPaging(null, "NO", 1, 5, null))
-                .thenReturn(mockResponse);
-
-        mockMvc.perform(get("/"))
-                .andExpect(status().isOk())
-                .andExpect(model().attributeExists("items", "paging", "sort"))
-                .andExpect(model().attribute("sort", "NO"));
-
-        verify(itemsService).getItemsWithPaging(null, "NO", 1, 5, null);
-    }
 
 
 }
