@@ -1,0 +1,103 @@
+openapi: 3.0.3
+info:
+  title: Payment Service API
+  description: Сервис для управления балансом и проведения платежей
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8081
+    description: Локальный сервер сервиса платежей
+
+paths:
+  /api/v1/balance:
+    get:
+      tags:
+        - Payment
+      summary: Получить текущий баланс пользователя
+      operationId: getBalance
+      responses:
+        '200':
+          description: Успешный запрос баланса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '500':
+          description: Ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/payment:
+    post:
+      tags:
+        - Payment
+      summary: Осуществить платеж (списание средств)
+      operationId: processPayment
+      requestBody:
+        description: Сумма к списанию
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Платеж успешно проведен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentSuccessResponse'
+        '400':
+          description: Недостаточно средств или некорректная сумма
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Недостаточно средств на балансе"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    BalanceResponse:
+      type: object
+      properties:
+        amount:
+          type: integer
+          format: int64
+          example: 150050
+
+
+    PaymentRequest:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: Сумма в рублях
+          minimum: 1
+          example: 45000
+
+    PaymentSuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+
+    # Стандартная ошибка
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Сообщение об ошибке"
