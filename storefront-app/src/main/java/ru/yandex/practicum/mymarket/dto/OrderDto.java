@@ -11,9 +11,9 @@ import java.util.List;
 @AllArgsConstructor
 public class OrderDto {
 
-    Long id;
+    private Long id;
 
-    List<ItemDto> items;
+    private List<ItemDto> items;
 
-    long totalSum;
+    private long totalSum;
 }

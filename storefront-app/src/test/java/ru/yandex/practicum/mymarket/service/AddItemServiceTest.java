@@ -6,12 +6,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
-import org.springframework.http.MediaType;
 import org.springframework.http.codec.multipart.FilePart;
-import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -25,7 +23,6 @@ import ru.yandex.practicum.mymarket.utils.Utils;
 import java.io.IOException;
 import java.nio.file.Path;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 @SpringBootTest(classes = AddItemService.class)
@@ -34,7 +31,8 @@ public class AddItemServiceTest {
     public static final String TITLE = "title";
     public static final String DESC = "desc";
     public static final String PRICE = "100";
-    @MockitoBean
+
+    @MockBean
     private ProductRepository productRepository;
 
     @Autowired

@@ -7,6 +7,7 @@
         <groupId>ru.yandex.practicum</groupId>
         <artifactId>my-market-app</artifactId>
         <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>storefront-app</artifactId>
@@ -31,6 +32,11 @@
         <artifactId>spring-boot-starter-thymeleaf</artifactId>
     </dependency>
     <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+    </dependency>
+
+    <dependency>
         <groupId>com.h2database</groupId>
         <artifactId>h2</artifactId>
     </dependency>
@@ -44,26 +50,75 @@
         <artifactId>tika-core</artifactId>
         <version>3.3.0</version>
     </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jdk8</artifactId>
+        </dependency>
     <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-test</artifactId>
         <scope>test</scope>
     </dependency>
     <!--  Source: https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-webflux-test  -->
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-webflux-test</artifactId>
-        <scope>compile</scope>
-    </dependency>
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-data-r2dbc-test</artifactId>
-        <scope>test</scope>
-    </dependency>
+<!--    <dependency>-->
+<!--        <groupId>org.springframework.boot</groupId>-->
+<!--        <artifactId>spring-boot-webflux-test</artifactId>-->
+<!--        <scope>compile</scope>-->
+<!--    </dependency>-->
+<!--    <dependency>-->
+<!--        <groupId>org.springframework.boot</groupId>-->
+<!--        <artifactId>spring-boot-starter-data-r2dbc-test</artifactId>-->
+<!--        <scope>test</scope>-->
+<!--    </dependency>-->
+
     <dependency>
         <groupId>io.projectreactor</groupId>
         <artifactId>reactor-test</artifactId>
         <scope>test</scope>
     </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.openapitools</groupId>
+                <artifactId>openapi-generator-maven-plugin</artifactId>
+                <version>7.1.0</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <inputSpec>${project.basedir}/src/main/resources/api-spec.yaml</inputSpec>
+                            <generatorName>java</generatorName>
+                            <apiPackage>ru.yandex.practicum.mymarket.api</apiPackage>
+                            <invokerPackage>ru.yandex.practicum.mymarket</invokerPackage>
+                            <modelPackage>ru.yandex.practicum.mymarket.domain</modelPackage>
+                            <generateApiTests>false</generateApiTests>
+                            <generateModelTests>false</generateModelTests>
+                            <generateApiDocumentation>false</generateApiDocumentation>
+                            <generateModelDocumentation>false</generateModelDocumentation>
+                            <configOptions>
+                                <library>webclient</library>
+                                <reactive>true</reactive>
+                                <useJakartaEe>true</useJakartaEe>
+                                <openApiNullable>false</openApiNullable>
+                                <useSpringBoot3>true</useSpringBoot3>
+                                <dateLibrary>java8</dateLibrary>
+                            </configOptions>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

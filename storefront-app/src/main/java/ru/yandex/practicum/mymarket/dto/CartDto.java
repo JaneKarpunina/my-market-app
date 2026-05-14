@@ -9,7 +9,7 @@ import java.util.List;
 @AllArgsConstructor
 public class CartDto {
 
-    List<ItemDto> items;
+    private List<ItemDto> items;
 
-    long total;
+    private long total;
 }

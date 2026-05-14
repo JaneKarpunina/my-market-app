@@ -12,6 +12,16 @@ import ru.yandex.practicum.mymarket.entity.Product;
 public interface ProductRepository extends ReactiveCrudRepository<Product, Long> {
 
     @Query("""
+            SELECT id FROM product
+            WHERE title ILIKE CONCAT('%', :search, '%') OR description ILIKE CONCAT('%', :search, '%')
+            ORDER BY
+                CASE WHEN :sort = 'ALPHA' THEN title END ASC,
+                CASE WHEN :sort = 'PRICE' THEN price END ASC
+            LIMIT :limit OFFSET :offset
+            """)
+    Flux<Long> findIdsOnly(String search, String sort, int limit, long offset);
+
+    @Query("""
                 SELECT p.*, COALESCE(ci.quantity, 0) as count
                 FROM product p
                 LEFT JOIN cart_item ci ON p.id = ci.product_id AND ci.cart_id = :cartId

@@ -3,6 +3,9 @@ package ru.yandex.practicum.mymarket.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.api.PaymentApi;
+import ru.yandex.practicum.mymarket.domain.BalanceResponse;
+import ru.yandex.practicum.mymarket.dto.CartDetailedResponse;
 import ru.yandex.practicum.mymarket.dto.CartDto;
 import ru.yandex.practicum.mymarket.entity.Cart;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
@@ -19,10 +22,13 @@ public class CartService {
 
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
+    private final PaymentApi paymentApi;
 
-    public CartService(CartRepository cartRepository, CartItemRepository cartItemRepository) {
+    public CartService(CartRepository cartRepository, CartItemRepository cartItemRepository,
+                       PaymentApi paymentApi) {
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
+        this.paymentApi = paymentApi;
     }
 
     @Transactional
@@ -71,5 +77,31 @@ public class CartService {
                     return Mono.empty();
                 })
                 .then();
+    }
+
+    public Mono<CartDetailedResponse> getCartDetailed(String cartId) {
+        Mono<CartDto> cartMono = getCartDto(cartId);
+
+        Mono<Long> balanceMono = paymentApi.getBalance()
+                .map(BalanceResponse::getAmount)
+                .onErrorReturn(-1L);
+
+        return Mono.zip(cartMono, balanceMono)
+                .map(tuple -> {
+                    CartDto cart = tuple.getT1();
+                    Long balance = tuple.getT2();
+
+                    String error = null;
+                    boolean canOrder = true;
+
+                    if (balance == -1) {
+                        error = "Сервис платежей недоступен";
+                        canOrder = false;
+                    } else if (balance < cart.getTotal()) {
+                        error = "Недостаточно средств";
+                        canOrder = false;
+                    }
+                    return new CartDetailedResponse(cart, balance, canOrder, error);
+                });
     }
 }

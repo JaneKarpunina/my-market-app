@@ -4,8 +4,11 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.api.PaymentApi;
+import ru.yandex.practicum.mymarket.domain.PaymentRequest;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.dto.OrderDto;
 import ru.yandex.practicum.mymarket.dto.OrderFlatRow;
@@ -29,12 +32,19 @@ public class OrdersService {
 
     private final CartRepository cartRepository;
 
+    private final CartService cartService;
+
+    private final PaymentApi paymentApi;
+
     public OrdersService(OrderRepository orderRepository, CartItemRepository cartItemRepository,
-                         OrderItemRepository orderItemRepository, CartRepository cartRepository) {
+                         OrderItemRepository orderItemRepository, CartRepository cartRepository,
+                         CartService cartService, PaymentApi paymentApi) {
         this.orderRepository = orderRepository;
         this.cartItemRepository = cartItemRepository;
         this.orderItemRepository = orderItemRepository;
         this.cartRepository = cartRepository;
+        this.cartService = cartService;
+        this.paymentApi = paymentApi;
     }
 
     @Transactional(readOnly = true)
@@ -101,6 +111,25 @@ public class OrdersService {
                     return Mono.just(orderDto);
                 });
 
+    }
+
+    public Mono<Long> processOrder(String cartId, ServerHttpResponse response) {
+
+        return cartService.getCartDto(cartId)
+                .flatMap(cartDto -> {
+
+                    PaymentRequest paymentRequest = new PaymentRequest();
+                    paymentRequest.setAmount(cartDto.getTotal());
+
+                    return paymentApi.processPayment(paymentRequest)
+                            .then(saveOrder(cartId, response));
+                })
+                .onErrorResume(WebClientResponseException.class, (WebClientResponseException ex) -> {
+                    if (ex.getStatusCode().is4xxClientError()) {
+                        return Mono.error(new RuntimeException("Оплата не прошла: недостаточно средств"));
+                    }
+                    return Mono.error(new RuntimeException("Сервис платежей временно недоступен"));
+                });
     }
 
 
