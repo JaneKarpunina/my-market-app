@@ -3,6 +3,7 @@ package ru.yandex.practicum.mymarket.service;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.api.PaymentApi;
 import ru.yandex.practicum.mymarket.domain.BalanceResponse;
@@ -16,6 +17,7 @@ import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.CartRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +30,7 @@ public class CartService {
     public static final String PLUS = "PLUS";
     public static final String MINUS = "MINUS";
     public static final String DELETE = "DELETE";
+    public static final int TTL_PRODUCT = 3;
 
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
@@ -116,6 +119,10 @@ public class CartService {
                             .collect(Collectors.toMap(p -> "product:" + p.getId(), p -> p));
 
                     return redisTemplate.opsForValue().multiSet(toCache)
+                            .then(Mono.defer(() -> Flux.fromIterable(toCache.keySet())
+                                    .flatMap(key -> redisTemplate
+                                            .expire(key, Duration.ofMinutes(TTL_PRODUCT)))
+                                    .then()))
                             .thenReturn(dbProducts);
                 });
     }

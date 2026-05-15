@@ -2,6 +2,7 @@ package ru.yandex.practicum.mymarket.service;
 
 import org.apache.tika.Tika;
 import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,9 +30,11 @@ public class AddItemService {
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
     private final ProductRepository productRepository;
+    private final ReactiveRedisTemplate<String, Object> redisTemplate;
 
-    public AddItemService(ProductRepository productRepository) {
+    public AddItemService(ProductRepository productRepository, ReactiveRedisTemplate<String, Object> redisTemplate) {
         this.productRepository = productRepository;
+        this.redisTemplate = redisTemplate;
     }
 
     @Transactional
@@ -61,6 +64,7 @@ public class AddItemService {
                     return productRepository.save(product);
                 })
                 .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(savedProduct -> invalidateCatalogPages())
                 .then();
     }
 
@@ -113,5 +117,18 @@ public class AddItemService {
                 });
 
         return Flux.concat(sizeCheck, typeCheck).then();
+    }
+
+    private Mono<Void> invalidateCatalogPages() {
+        String pattern = "page:s:*";
+
+        return redisTemplate.keys(pattern)
+                .collectList()
+                .flatMap(keys -> {
+                    if (keys.isEmpty()) {
+                        return Mono.empty();
+                    }
+                    return redisTemplate.unlink(keys.toArray(new String[0])).then();
+                });
     }
 }

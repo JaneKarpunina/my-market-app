@@ -19,12 +19,17 @@ import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class ItemsService {
 
     public static final String PLUS = "PLUS";
     public static final String MINUS = "MINUS";
+    public static final int TTL_PRODUCT = 3;
+    public static final String PRICE = "PRICE";
+    public static final int TTL_PRICE = 1;
+    public static final int TTL_TITLE_DESC = 3;
 
     private final ProductRepository productRepository;
     private final CartRepository cartRepository;
@@ -43,7 +48,7 @@ public class ItemsService {
     public Mono<ItemsWithPaging> getItemsWithPaging(String search, String sort, int pageNumber, int pageSize,
                                                     String cartId) {
         String searchPattern = (search == null) ? "" : search;
-        long offset = (long) (Math.max(1, pageNumber) - 1) * pageSize;
+        long offset = (long) (Math.max(TTL_PRICE, pageNumber) - TTL_PRICE) * pageSize;
 
         String pageKey = String.format("page:s:%s:sort:%s:p:%d:sz:%d", searchPattern, sort, pageNumber, pageSize);
 
@@ -56,26 +61,29 @@ public class ItemsService {
             long totalItems = tuple.getT2();
 
             return getProductsByIds(productIds)
-                    .flatMap(products -> {
-                        // 3. Если есть cartId, подтягиваем количества товаров в корзине
-                        return enrichWithQuantity(products, cartId)
-                                .map(itemDtos -> {
-                                    int totalPages = (int) Math.ceil((double) totalItems / pageSize);
-                                    int currentPage = Math.max(1, Math.min(pageNumber, totalPages == 0 ? 1 : totalPages));
+                    .flatMap(products -> enrichWithQuantity(products, cartId)
+                            .map(itemDtos -> {
+                                int totalPages = (int) Math.ceil((double) totalItems / pageSize);
+                                int currentPage = Math.max(1,
+                                        Math.min(pageNumber, totalPages == 0 ? 1 : totalPages));
 
-                                    List<List<ItemDto>> itemRows = partitionAndFill(itemDtos, 3);
-                                    Paging paging = new Paging(pageSize, currentPage, currentPage > 1,
-                                            currentPage < totalPages);
+                                List<List<ItemDto>> itemRows = partitionAndFill(itemDtos, 3);
+                                Paging paging = new Paging(pageSize, currentPage, currentPage > 1,
+                                        currentPage < totalPages);
 
-                                    return new ItemsWithPaging(itemRows, paging);
-                                });
-                    });
+                                return new ItemsWithPaging(itemRows, paging);
+                            }));
         });
     }
 
     private Mono<List<Long>> getCachedProductIds(String key, String search, String sort, int limit, long offset) {
-        return redisTemplate.opsForList().range(key, 0, -1)
-                .cast(Long.class)
+        return redisTemplate.opsForList().range(key, 0, -TTL_PRICE)
+                .map(obj -> {
+                    if (obj instanceof Number number) {
+                        return number.longValue();
+                    }
+                    return Long.parseLong(obj.toString());
+                })
                 .collectList()
                 .flatMap(list -> list.isEmpty()
                         ? productRepository.findIdsOnly(search, sort, limit, offset)
@@ -85,9 +93,9 @@ public class ItemsService {
                                 return Mono.just(ids);
                             }
 
-                            Duration cacheTtl = "PRICE".equalsIgnoreCase(sort)
-                                    ? Duration.ofMinutes(1)
-                                    : Duration.ofMinutes(3);
+                            Duration cacheTtl = PRICE.equalsIgnoreCase(sort)
+                                    ? Duration.ofMinutes(TTL_PRICE)
+                                    : Duration.ofMinutes(TTL_TITLE_DESC);
 
                             Object[] idsArray = ids.stream().map(id -> (Object) id).toArray();
 
@@ -126,41 +134,56 @@ public class ItemsService {
                 .toList();
 
         return redisTemplate.opsForValue().multiGet(cacheKeys)
-                .flatMap(cachedObjects -> {
-                    Map<Long, Product> foundInCache = new HashMap<>();
-                    List<Long> missingIds = new ArrayList<>();
+                .flatMap(cachedObjects -> handleCacheResult(cachedObjects, productIds));
+    }
 
-                    for (int i = 0; i < productIds.size(); i++) {
-                        Product p = (Product) cachedObjects.get(i);
-                        if (p != null) {
-                            foundInCache.put(productIds.get(i), p);
-                        } else {
-                            missingIds.add(productIds.get(i));
-                        }
-                    }
-                    if (missingIds.isEmpty()) {
-                        return Mono.just(sortByIdList(foundInCache, productIds));
-                    }
+    private Mono<List<Product>> handleCacheResult(List<Object> cachedObjects, List<Long> productIds) {
+        Map<Long, Product> foundInCache = new HashMap<>();
+        List<Long> missingIds = new ArrayList<>();
 
-                    return productRepository.findAllById(missingIds).collectList()
-                            .flatMap(dbProducts -> {
-                                if (dbProducts.isEmpty()) {
-                                    return Mono.just(sortByIdList(foundInCache, productIds));
-                                }
+        for (int i = 0; i < productIds.size(); i++) {
+            Product p = (Product) cachedObjects.get(i);
+            if (p != null) {
+                foundInCache.put(productIds.get(i), p);
+            } else {
+                missingIds.add(productIds.get(i));
+            }
+        }
 
-                                Map<String, Object> toCache = new HashMap<>();
-                                for (Product p : dbProducts) {
-                                    foundInCache.put(p.getId(), p);
-                                    toCache.put("product:" + p.getId(), p);
-                                }
+        if (missingIds.isEmpty()) {
+            return Mono.just(sortByIdList(foundInCache, productIds));
+        }
 
-                                return redisTemplate.opsForValue().multiSet(toCache)
-                                        .then(redisTemplate.expire("product:" + dbProducts.getFirst().getId(),
-                                                Duration.ofMinutes(3))) // опционально TTL
-                                        .thenReturn(sortByIdList(foundInCache, productIds));
-                            });
+        return fetchAndCacheMissingProducts(missingIds)
+                .map(dbProducts -> {
+                    dbProducts.forEach(p -> foundInCache.put(p.getId(), p));
+                    return sortByIdList(foundInCache, productIds);
                 });
     }
+
+    private Mono<List<Product>> fetchAndCacheMissingProducts(List<Long> missingIds) {
+        return productRepository.findAllById(missingIds).collectList()
+                .flatMap(dbProducts -> {
+                    if (dbProducts.isEmpty()) {
+                        return Mono.just(dbProducts);
+                    }
+
+                    Map<String, Object> toCache = dbProducts.stream()
+                            .collect(Collectors.toMap(p -> "product:" + p.getId(), p -> p));
+
+                    return redisTemplate.opsForValue().multiSet(toCache)
+                            .then(Mono.defer(() -> applyTtlToKeys(toCache.keySet())))
+                            .thenReturn(dbProducts);
+                });
+    }
+
+    private Mono<Void> applyTtlToKeys(Set<String> keys) {
+        return Flux.fromIterable(keys)
+                .flatMap(key -> redisTemplate.expire(key, Duration.ofMinutes(TTL_PRODUCT)))
+                .then();
+    }
+
+
 
     private List<Product> sortByIdList(Map<Long, Product> productMap, List<Long> ids) {
         return ids.stream()
@@ -232,7 +255,7 @@ public class ItemsService {
                     CartItem item = new CartItem();
                     item.setCartId(cartId);
                     item.setProductId(id);
-                    item.setQuantity(1);
+                    item.setQuantity(TTL_PRICE);
                     // version и id не трогаем, они останутся null
                     return cartItemRepository.save(item); }))
                 .then();
@@ -242,7 +265,7 @@ public class ItemsService {
         return cartItemRepository.findByCartIdAndProductId(cartId, id)
                 .switchIfEmpty(Mono.defer(() -> {
                     if (PLUS.equals(action)) {
-                        return cartItemRepository.save(new CartItem(null, cartId, id, 1, null))
+                        return cartItemRepository.save(new CartItem(null, cartId, id, TTL_PRICE, null))
                                 .then(Mono.empty());
                     }
                     return Mono.empty();
@@ -250,16 +273,16 @@ public class ItemsService {
                 .flatMap(cartItem -> {
                     int quantity = cartItem.getQuantity();
 
-                    if (quantity == 1 && MINUS.equals(action)) {
+                    if (quantity == TTL_PRICE && MINUS.equals(action)) {
                         return cartItemRepository.delete(cartItem);
                     }
 
                     CartItem updatedItem = null;
-                    if (quantity > 1 && MINUS.equals(action)) {
-                        cartItem.setQuantity(quantity - 1);
+                    if (quantity > TTL_PRICE && MINUS.equals(action)) {
+                        cartItem.setQuantity(quantity - TTL_PRICE);
                         updatedItem = cartItem;
                     } else if (quantity < Integer.MAX_VALUE && PLUS.equals(action)) {
-                        cartItem.setQuantity(quantity + 1);
+                        cartItem.setQuantity(quantity + TTL_PRICE);
                         updatedItem = cartItem;
                     }
 
@@ -270,17 +293,47 @@ public class ItemsService {
 
     @Transactional(readOnly = true)
     public Mono<ItemDto> getItemWithQuantity(Long id, String cartId) {
-        return productRepository.findById(id)
-                .flatMap(product -> getItemDto(id, cartId));
+        if (id == null) {
+            return Mono.just(new ItemDto());
+        }
+
+        return getProductWithCache(id)
+                .flatMap(product -> enrichWithCartQuantity(product, cartId))
+                .defaultIfEmpty(new ItemDto());
     }
 
-    private Mono<ItemDto> getItemDto(Long id, String cartId) {
+    private Mono<Product> getProductWithCache(Long id) {
+        String cacheKey = "product:" + id;
+
+        return redisTemplate.opsForValue().get(cacheKey)
+                .cast(Product.class)
+                .switchIfEmpty(Mono.defer(() ->
+                        productRepository.findById(id)
+                                .flatMap(product ->
+                                        redisTemplate.opsForValue().set(cacheKey, product, Duration.ofMinutes(TTL_TITLE_DESC))
+                                                .thenReturn(product)
+                                )
+                ));
+    }
+
+    private Mono<ItemDto> enrichWithCartQuantity(Product product, String cartId) {
         if (cartId == null || cartId.isEmpty()) {
-            return productRepository.findProductWithZeroCartId(id)
-                    .defaultIfEmpty(new ItemDto());
-        } else {
-            return productRepository.findProductWithQuantity(id, cartId)
-                    .defaultIfEmpty(new ItemDto());
+            return Mono.just(mapToItemDto(product, 0));
         }
+
+        return cartItemRepository.findByCartIdAndProductId(cartId, product.getId())
+                .map(cartItem -> mapToItemDto(product, cartItem.getQuantity()))
+                .defaultIfEmpty(mapToItemDto(product, 0));
+    }
+
+    private ItemDto mapToItemDto(Product product, int quantity) {
+        return new ItemDto(
+                product.getId(),
+                product.getTitle(),
+                product.getDescription(),
+                product.getImgPath(),
+                product.getPrice(),
+                quantity
+        );
     }
 }
