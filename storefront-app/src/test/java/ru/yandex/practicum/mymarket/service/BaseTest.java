@@ -1,14 +1,14 @@
 package ru.yandex.practicum.mymarket.service;
 
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.CartRepository;
 
 public class BaseTest {
 
-    @MockitoBean
+    @MockBean
     public CartRepository cartRepository;
 
-    @MockitoBean
+    @MockBean
     public CartItemRepository cartItemRepository;
 }

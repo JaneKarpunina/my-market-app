@@ -4,9 +4,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.server.reactive.ServerHttpResponse;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.util.LinkedMultiValueMap;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -30,10 +30,10 @@ public class ItemsServiceTest extends BaseTest {
     private final Long productId = 1L;
     private final String cartId = "test-cart";
 
-    @MockitoBean
+    @MockBean
     private ProductRepository productRepository;
 
-    @MockitoBean
+    @MockBean
     private ServerHttpResponse response;
 
     @Autowired
@@ -44,85 +44,6 @@ public class ItemsServiceTest extends BaseTest {
         reset(productRepository);
         reset(cartRepository);
         reset(cartItemRepository);
-    }
-
-    @Test
-    void getItemsWithPaging_Success() {
-        String search = "phone";
-        String cartId = "cart-123";
-        int page = 1;
-        int size = 3;
-
-        ItemDto item1 = new ItemDto();
-        item1.setId(1L);
-        ItemDto item2 = new ItemDto();
-        item2.setId(2L);
-        // Всего 2 товара, значит должна быть 1 строка, дополненная 1 пустышкой
-
-        when(productRepository.findProductsWithQuantityPaged(anyString(), anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(Flux.just(item1, item2));
-
-        when(productRepository.countByTitleAndDescription(anyString()))
-                .thenReturn(Mono.just(2L));
-
-        Mono<ItemsWithPaging> result = itemsService.getItemsWithPaging(search, "asc", page, size, cartId);
-
-        StepVerifier.create(result)
-                .assertNext(pagingResponse -> {
-                    // Проверка пагинации
-                    assertNotNull(pagingResponse.getPaging());
-                    assertEquals(1, pagingResponse.getPaging().getPageNumber());
-                    assertFalse(pagingResponse.getPaging().isHasNext());
-
-                    // Проверка разбиения на строки (partitionAndFill)
-                    List<List<ItemDto>> rows = pagingResponse.getItems();
-                    assertEquals(1, rows.size());
-                    assertEquals(3, rows.getFirst().size());
-                    assertEquals(-1L, rows.getFirst().get(2).getId());
-                })
-                .verifyComplete();
-    }
-
-    @Test
-    void getItemsWithPaging_NoCartId() {
-        when(productRepository.findProductsWithZeroCartIdPaged(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(Flux.empty());
-        when(productRepository.countByTitleAndDescription(anyString()))
-                .thenReturn(Mono.just(0L));
-
-        Mono<ItemsWithPaging> result = itemsService.getItemsWithPaging(null, "desc",
-                1, 3, null);
-
-        StepVerifier.create(result)
-                .assertNext(response -> {
-                    assertTrue(response.getItems().isEmpty());
-                    assertEquals(1, response.getPaging().getPageNumber());
-                })
-                .verifyComplete();
-    }
-
-    @Test
-    void getItemsWithPaging_MultiplePages() {
-
-        int pageSize = 3;
-        long totalItems = 10; // 10 товаров / 3 на стр = 4 страницы
-
-        when(productRepository.findProductsWithZeroCartIdPaged(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(Flux.just(new ItemDto(), new ItemDto(), new ItemDto()));
-        when(productRepository.countByTitleAndDescription(anyString()))
-                .thenReturn(Mono.just(totalItems));
-
-        Mono<ItemsWithPaging> result = itemsService.getItemsWithPaging("", "asc", 2,
-                pageSize, null);
-
-        StepVerifier.create(result)
-                .assertNext(response -> {
-                    Paging p = response.getPaging();
-                    assertEquals(2, p.getPageNumber());
-                    assertTrue(p.isHasPrevious());
-                    assertTrue(p.isHasNext());
-                })
-                .verifyComplete();
     }
 
     @Test

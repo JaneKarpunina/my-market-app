@@ -310,7 +310,8 @@ public class ItemsService {
                 .switchIfEmpty(Mono.defer(() ->
                         productRepository.findById(id)
                                 .flatMap(product ->
-                                        redisTemplate.opsForValue().set(cacheKey, product, Duration.ofMinutes(TTL_TITLE_DESC))
+                                        redisTemplate.opsForValue().set(cacheKey, product,
+                                                        Duration.ofMinutes(TTL_TITLE_DESC))
                                                 .thenReturn(product)
                                 )
                 ));

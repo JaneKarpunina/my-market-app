@@ -25,27 +25,6 @@ public class ProductRepositoryTest {
     }
 
     @Test
-    void findProductsWithQuantityPaged_Success() {
-        String cartId = "cart-1";
-        insertProduct(1L, "Apple iPhone", "Electronics", 1000L);
-        insertProduct(2L, "Samsung Galaxy", "Electronics", 900L);
-
-        insertCartItem(cartId, 1L, 3);
-
-        productRepository.findProductsWithQuantityPaged("Electronics", cartId, "PRICE", 2, 0)
-                .as(StepVerifier::create)
-                .assertNext(item -> {
-                    assertEquals("Samsung Galaxy", item.getTitle());
-                    assertEquals(0, item.getCount());
-                })
-                .assertNext(item -> {
-                    assertEquals("Apple iPhone", item.getTitle());
-                    assertEquals(3, item.getCount());
-                })
-                .verifyComplete();
-    }
-
-    @Test
     void countByTitleAndDescription_Success() {
         insertProduct(1L, "Bread", "Food", 50L);
         insertProduct(2L, "Milk", "Food", 80L);
@@ -82,19 +61,6 @@ public class ProductRepositoryTest {
                     assertEquals("Table", item.getTitle());
                     assertEquals(0, item.getCount());
                 })
-                .verifyComplete();
-    }
-
-    @Test
-    void searchByDescription() {
-        insertProduct(1L, "Apple", "Fruit red", 100L);
-        insertProduct(2L, "Banana", "Fruit yellow", 50L);
-        insertProduct(3L, "Cherry", "Berry red", 200L);
-
-        productRepository.findProductsWithZeroCartIdPaged("red", "PRICE", 10, 0)
-                .as(StepVerifier::create)
-                .assertNext(item -> assertEquals("Apple", item.getTitle()))
-                .assertNext(item -> assertEquals("Cherry", item.getTitle()))
                 .verifyComplete();
     }
 

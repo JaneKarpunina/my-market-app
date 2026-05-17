@@ -1,6 +1,7 @@
 package ru.yandex.practicum.mymarket.service;
 
 import org.apache.tika.Tika;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.http.codec.multipart.FilePart;
@@ -26,8 +27,11 @@ import java.util.UUID;
 public class AddItemService {
 
 
-    private static final String IMAGES_DIR = "uploads/";
-    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+    @Value("${app.images.dir:images}")
+    private String imagesDir;
+
+    @Value("${app.images.max-size:5242880}") // Дефолт: 5 МБ
+    private long maxFileSize; // 5 MB
 
     private final ProductRepository productRepository;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
@@ -41,14 +45,14 @@ public class AddItemService {
     public Mono<Void> addItem(String title, String description, String price, FilePart imageFile) {
 
         String filename = UUID.randomUUID() + "_" + imageFile.filename();
-        Path filePath = Paths.get(IMAGES_DIR, filename);
+        Path filePath = Paths.get(imagesDir, filename);
 
         return Mono.fromCallable(() -> convertPrice(price))
                 .flatMap(finalPrice -> checkFile(imageFile)
                         .thenReturn(finalPrice))
                 .flatMap(finalPrice -> Mono.fromRunnable(() -> {
                     try {
-                        Files.createDirectories(Paths.get(IMAGES_DIR));
+                        Files.createDirectories(Paths.get(imagesDir));
                     } catch (IOException e) {
                         throw new RuntimeException("Ошибка создания папки");
                     }
@@ -95,8 +99,8 @@ public class AddItemService {
                 .map(dataBuffer -> (long) dataBuffer.readableByteCount())
                 .reduce(0L, Long::sum)
                 .flatMap(size -> {
-                    if (size > MAX_FILE_SIZE) {
-                        return Mono.error(new MaxUploadSizeExceededException(MAX_FILE_SIZE));
+                    if (size > maxFileSize) {
+                        return Mono.error(new MaxUploadSizeExceededException(maxFileSize));
                     }
                     return Mono.empty();
                 });

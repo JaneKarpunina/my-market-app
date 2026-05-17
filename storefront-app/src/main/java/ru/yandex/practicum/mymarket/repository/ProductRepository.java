@@ -21,28 +21,28 @@ public interface ProductRepository extends ReactiveCrudRepository<Product, Long>
             """)
     Flux<Long> findIdsOnly(String search, String sort, int limit, long offset);
 
-    @Query("""
-                SELECT p.*, COALESCE(ci.quantity, 0) as count
-                FROM product p
-                LEFT JOIN cart_item ci ON p.id = ci.product_id AND ci.cart_id = :cartId
-                WHERE p.title ILIKE CONCAT('%', :search, '%') OR description ILIKE CONCAT('%', :search, '%')
-                ORDER BY
-                    CASE WHEN :sort = 'ALPHA' THEN p.title END ASC,
-                    CASE WHEN :sort = 'PRICE' THEN p.price END ASC
-                LIMIT :limit OFFSET :offset
-            """)
-    Flux<ItemDto> findProductsWithQuantityPaged(String search, String cartId, String sort, int limit, long offset);
-
-    // С пагинацией без корзины
-    @Query("""
-            SELECT *, 0 as quantity FROM product
-            WHERE title ILIKE CONCAT('%', :search, '%') OR description ILIKE CONCAT('%', :search, '%')
-            ORDER BY
-                CASE WHEN :sort = 'ALPHA' THEN title END ASC,
-                CASE WHEN :sort = 'PRICE' THEN price END ASC
-            LIMIT :limit OFFSET :offset
-            """)
-    Flux<ItemDto> findProductsWithZeroCartIdPaged(String search, String sort, int limit, long offset);
+//    @Query("""
+//                SELECT p.*, COALESCE(ci.quantity, 0) as count
+//                FROM product p
+//                LEFT JOIN cart_item ci ON p.id = ci.product_id AND ci.cart_id = :cartId
+//                WHERE p.title ILIKE CONCAT('%', :search, '%') OR description ILIKE CONCAT('%', :search, '%')
+//                ORDER BY
+//                    CASE WHEN :sort = 'ALPHA' THEN p.title END ASC,
+//                    CASE WHEN :sort = 'PRICE' THEN p.price END ASC
+//                LIMIT :limit OFFSET :offset
+//            """)
+//    Flux<ItemDto> findProductsWithQuantityPaged(String search, String cartId, String sort, int limit, long offset);
+//
+//    // С пагинацией без корзины
+//    @Query("""
+//            SELECT *, 0 as quantity FROM product
+//            WHERE title ILIKE CONCAT('%', :search, '%') OR description ILIKE CONCAT('%', :search, '%')
+//            ORDER BY
+//                CASE WHEN :sort = 'ALPHA' THEN title END ASC,
+//                CASE WHEN :sort = 'PRICE' THEN price END ASC
+//            LIMIT :limit OFFSET :offset
+//            """)
+//    Flux<ItemDto> findProductsWithZeroCartIdPaged(String search, String sort, int limit, long offset);
 
     @Query("""
              SELECT COUNT(*) FROM product
