@@ -17,8 +17,8 @@ public interface CartItemRepository extends ReactiveCrudRepository<CartItem, Lon
     Flux<CartItem> findByCartId(String cartId);
 
     @Query("""
-            SELECT * FROM cart_item 
-            WHERE cart_id = :cartId 
+            SELECT * FROM cart_item
+            WHERE cart_id = :cartId
               AND product_id IN (:ids)
             """)
     Flux<CartItem> findAllByCartIdAndProductIds(String cartId, List<Long> ids);

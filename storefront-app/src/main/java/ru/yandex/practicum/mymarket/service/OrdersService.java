@@ -122,7 +122,7 @@ public class OrdersService {
                     paymentRequest.setAmount(cartDto.getTotal());
 
                     return paymentApi.processPayment(paymentRequest)
-                            .then(saveOrder(cartId, response));
+                            .flatMap(paymentResponse -> saveOrder(cartId, response));
                 })
                 .onErrorResume(WebClientResponseException.class, (WebClientResponseException ex) -> {
                     if (ex.getStatusCode().is4xxClientError()) {
