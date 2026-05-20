@@ -11,7 +11,7 @@ public class H2ConsoleConfig {
 
     @EventListener(ContextRefreshedEvent.class)
     public void start() throws java.sql.SQLException {
-        this.webServer = org.h2.tools.Server.createWebServer("-webPort", "8082", "-webAllowOthers").start();
+        this.webServer = org.h2.tools.Server.createWebServer("-webPort", "0", "-webAllowOthers").start();
     }
 
     @EventListener(ContextClosedEvent.class)

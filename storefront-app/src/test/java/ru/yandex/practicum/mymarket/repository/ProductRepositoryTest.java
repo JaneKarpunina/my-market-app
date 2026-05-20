@@ -5,9 +5,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.data.r2dbc.DataR2dbcTest;
 import org.springframework.r2dbc.core.DatabaseClient;
+import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
 @DataR2dbcTest
 public class ProductRepositoryTest {
@@ -60,6 +65,26 @@ public class ProductRepositoryTest {
                 .assertNext(item -> {
                     assertEquals("Table", item.getTitle());
                     assertEquals(0, item.getCount());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldFindIdsBySearchTermWithAlphabeticalOrder() {
+
+        insertProduct(1L, "Apple iPhone 15", "Смартфон от Apple", 1000L);
+        insertProduct(2L, "Samsung Galaxy S24", "Флагман от Samsung", 900L);
+        insertProduct(3L, "Apple iPad Air", "Планшет Apple для работы", 600L);
+        insertProduct(4L, "Xiaomi Redmi Note", "Бюджетный смартфон", 300L);
+
+        Flux<Long> idsFlux = productRepository.findIdsOnly("Apple", "ALPHA", 10, 0);
+
+        StepVerifier.create(idsFlux)
+                .recordWith(ArrayList::new)
+                .expectNextCount(2)
+                .consumeRecordedWith(ids -> {
+                    List<Long> expectedIds = List.of(3L, 1L);
+                    assertIterableEquals(expectedIds, ids);
                 })
                 .verifyComplete();
     }

@@ -265,7 +265,7 @@ public class ItemsService {
         return cartItemRepository.findByCartIdAndProductId(cartId, id)
                 .switchIfEmpty(Mono.defer(() -> {
                     if (PLUS.equals(action)) {
-                        return cartItemRepository.save(new CartItem(null, cartId, id, TTL_PRICE, null))
+                        return cartItemRepository.save(new CartItem(null, cartId, id, 1, null))
                                 .then(Mono.empty());
                     }
                     return Mono.empty();
@@ -273,16 +273,16 @@ public class ItemsService {
                 .flatMap(cartItem -> {
                     int quantity = cartItem.getQuantity();
 
-                    if (quantity == TTL_PRICE && MINUS.equals(action)) {
+                    if (quantity == 1 && MINUS.equals(action)) {
                         return cartItemRepository.delete(cartItem);
                     }
 
                     CartItem updatedItem = null;
-                    if (quantity > TTL_PRICE && MINUS.equals(action)) {
-                        cartItem.setQuantity(quantity - TTL_PRICE);
+                    if (quantity > 1 && MINUS.equals(action)) {
+                        cartItem.setQuantity(quantity - 1);
                         updatedItem = cartItem;
                     } else if (quantity < Integer.MAX_VALUE && PLUS.equals(action)) {
-                        cartItem.setQuantity(quantity + TTL_PRICE);
+                        cartItem.setQuantity(quantity + 1);
                         updatedItem = cartItem;
                     }
 
@@ -311,7 +311,7 @@ public class ItemsService {
                         productRepository.findById(id)
                                 .flatMap(product ->
                                         redisTemplate.opsForValue().set(cacheKey, product,
-                                                        Duration.ofMinutes(TTL_TITLE_DESC))
+                                                        Duration.ofMinutes(TTL_PRODUCT))
                                                 .thenReturn(product)
                                 )
                 ));

@@ -27,7 +27,7 @@ import java.util.UUID;
 public class AddItemService {
 
 
-    @Value("${app.images.dir:images}")
+    @Value("${app.images.dir:uploads}")
     private String imagesDir;
 
     @Value("${app.images.max-size:5242880}") // Дефолт: 5 МБ

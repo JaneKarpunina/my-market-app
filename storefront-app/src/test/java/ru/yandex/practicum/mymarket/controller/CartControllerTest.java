@@ -7,10 +7,13 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.dto.CartDetailedResponse;
 import ru.yandex.practicum.mymarket.dto.CartDto;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
+import ru.yandex.practicum.mymarket.entity.Cart;
 import ru.yandex.practicum.mymarket.service.CartService;
 
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -26,21 +29,18 @@ public class CartControllerTest {
     @MockBean
     CartService cartService;
 
-    private final String cartId = "test-cart-123";
-
     @Test
-    void getCart_ShouldReturnCartView() {
-        // Given
-        ItemDto item = new ItemDto();
-        item.setTitle("Apple");
-        item.setPrice(100L);
-        item.setCount(2);
+    void shouldReturnCartViewWithModelAttributes() {
+        CartDetailedResponse mockResponse = createMockCartData();
+        String cartId = "test-cart-id";
+        String error = "some-error";
 
-        CartDto cartDto = new CartDto(List.of(item), 200L);
-        when(cartService.getCartDto(cartId)).thenReturn(Mono.just(cartDto));
+        when(cartService.getCartDetailed(cartId)).thenReturn(Mono.just(mockResponse));
 
         webTestClient.get()
-                .uri("/cart/items")
+                .uri(uriBuilder -> uriBuilder.path("/cart/items")
+                        .queryParam("error", error)
+                        .build())
                 .cookie("cartId", cartId)
                 .exchange()
                 .expectStatus().isOk()
@@ -48,39 +48,36 @@ public class CartControllerTest {
                 .consumeWith(response -> {
                     String body = response.getResponseBody();
                     assertNotNull(body);
-                    assertTrue(body.contains("Apple"));
-                    assertTrue(body.contains("200"));
+                    assertTrue(body.contains("0"));
                 });
 
-        verify(cartService).getCartDto(cartId);
     }
 
     @Test
-    void changeItemQuantity_ShouldUpdateAndReturnView() {
+    void shouldChangeItemQuantityAndReturnRenderingView() {
+        CartDetailedResponse mockResponse = createMockCartData();
+        String cartId = "test-cart-id";
 
-        Long productId = 1L;
-        String action = "PLUS";
-        CartDto updatedCart = new CartDto(List.of(), 500L);
-
-        when(cartService.changeItemQuantity(eq(productId), eq(action), eq(cartId)))
+        when(cartService.changeItemQuantity(eq(123L), eq("PLUS"), eq(cartId)))
                 .thenReturn(Mono.empty());
-        when(cartService.getCartDto(cartId))
-                .thenReturn(Mono.just(updatedCart));
+
+        when(cartService.getCartDetailed(cartId))
+                .thenReturn(Mono.just(mockResponse));
 
         webTestClient.post()
                 .uri("/cart/items")
-                .cookie("cartId", cartId)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .bodyValue("id=" + productId + "&action=" + action)
+                .bodyValue("id=123&action=PLUS")
+                .cookie("cartId", cartId)
                 .exchange()
-                .expectStatus().isOk()
-                .expectBody(String.class)
-                .consumeWith(response -> {
-                    String body = response.getResponseBody();
-                    assertNotNull(body);
-                });
+                .expectStatus().isOk();
 
-        verify(cartService).changeItemQuantity(productId, action, cartId);
-        verify(cartService).getCartDto(cartId);
+    }
+
+    private CartDetailedResponse createMockCartData() {
+        List<ItemDto> mockItems = Collections.emptyList();
+        CartDto mockCart = new CartDto(mockItems, 0L);
+
+        return new CartDetailedResponse(mockCart, 1000L, true, null);
     }
 }

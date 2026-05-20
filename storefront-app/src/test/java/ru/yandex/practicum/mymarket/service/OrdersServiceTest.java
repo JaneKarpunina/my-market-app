@@ -5,10 +5,18 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.mock.http.server.reactive.MockServerHttpResponse;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.yandex.practicum.mymarket.api.PaymentApi;
+import ru.yandex.practicum.mymarket.domain.PaymentRequest;
+import ru.yandex.practicum.mymarket.domain.PaymentSuccessResponse;
+import ru.yandex.practicum.mymarket.dto.CartDto;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.dto.OrderFlatRow;
 import ru.yandex.practicum.mymarket.entity.CartItem;
@@ -21,8 +29,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @SpringBootTest(classes = OrdersService.class)
@@ -30,6 +37,9 @@ public class OrdersServiceTest extends BaseTest {
 
     @Autowired
     private OrdersService ordersService;
+
+    @MockBean
+    private CartService cartService;
 
     @MockBean
     private OrderRepository orderRepository;
@@ -40,12 +50,22 @@ public class OrdersServiceTest extends BaseTest {
     @MockBean
     private ServerHttpResponse response;
 
+    @MockBean
+    private PaymentApi paymentApi;
+
+    private final String cartId = "cart-111";
+    private final Long orderId = 777L;
+
     @BeforeEach
     void resetMocks() {
         reset(cartRepository);
         reset(cartItemRepository);
         reset(orderRepository);
         reset(orderItemRepository);
+        reset(paymentApi);
+
+        CartDto mockCartDto = new CartDto(List.of(), 1500L);
+        lenient().when(cartService.getCartDto(cartId)).thenReturn(Mono.just(mockCartDto));
     }
 
     @Test
@@ -148,5 +168,81 @@ public class OrdersServiceTest extends BaseTest {
         verify(response).addCookie(argThat(cookie ->
                 cookie.getName().equals("cartId") && cookie.getMaxAge().isZero()
         ));
+    }
+
+    @Test
+    void processOrder_Success_ShouldCompletePaymentAndSaveOrder() {
+
+        PaymentSuccessResponse paymentResponse = new PaymentSuccessResponse();
+        paymentResponse.setStatus("success");
+        when(paymentApi.processPayment(any(PaymentRequest.class))).thenReturn(Mono.just(paymentResponse));
+
+        Order mockOrder = new Order();
+        mockOrder.setId(orderId);
+        when(orderRepository.save(any(Order.class))).thenReturn(Mono.just(mockOrder));
+
+        CartItem cartItem = new CartItem(1L, cartId, 42L, 2, 1L);
+        when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.just(cartItem));
+        when(orderItemRepository.saveAll(any(Iterable.class))).thenReturn(Flux.just(new OrderItem()));
+        when(cartRepository.deleteById(cartId)).thenReturn(Mono.empty());
+
+        MockServerHttpResponse response = new MockServerHttpResponse();
+
+        Mono<Long> result = ordersService.processOrder(cartId, response);
+
+        StepVerifier.create(result)
+                .expectNext(orderId)
+                .verifyComplete();
+
+        verify(orderRepository, times(1)).save(any(Order.class));
+        verify(cartRepository, times(1)).deleteById(cartId);
+
+        ResponseCookie deletedCookie = response.getCookies().getFirst("cartId");
+        assertNotNull(deletedCookie);
+        assertEquals("", deletedCookie.getValue());
+        assertEquals(0, deletedCookie.getMaxAge().getSeconds());
+    }
+
+    @Test
+    void processOrder_Failed_WhenInsufficientFunds_ShouldThrowAndNotSaveOrder() {
+
+        WebClientResponseException ex400 = WebClientResponseException.create(
+                HttpStatus.BAD_REQUEST.value(), "Bad Request", null, null, null);
+
+        when(paymentApi.processPayment(any(PaymentRequest.class))).thenReturn(Mono.error(ex400));
+
+        MockServerHttpResponse response = new MockServerHttpResponse();
+
+        Mono<Long> result = ordersService.processOrder(cartId, response);
+
+        StepVerifier.create(result)
+                .expectErrorMessage("Оплата не прошла: недостаточно средств")
+                .verify();
+
+        verify(orderRepository, never()).save(any(Order.class));
+        verify(cartRepository, never()).deleteById(anyString());
+
+        assertNull(response.getCookies().getFirst("cartId"));
+    }
+
+    @Test
+    void processOrder_Failed_WhenPaymentServiceIsDown_ShouldThrowServiceUnavailable() {
+
+        WebClientResponseException ex500 = WebClientResponseException.create(
+                HttpStatus.INTERNAL_SERVER_ERROR.value(), "Internal Error",
+                null, null, null);
+
+        when(paymentApi.processPayment(any(PaymentRequest.class))).thenReturn(Mono.error(ex500));
+
+        MockServerHttpResponse response = new MockServerHttpResponse();
+
+        Mono<Long> result = ordersService.processOrder(cartId, response);
+
+        StepVerifier.create(result)
+                .expectErrorMessage("Сервис платежей временно недоступен")
+                .verify();
+
+        verify(orderRepository, never()).save(any(Order.class));
+        verify(cartRepository, never()).deleteById(anyString());
     }
 }
