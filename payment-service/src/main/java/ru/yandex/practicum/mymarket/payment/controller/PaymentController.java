@@ -1,16 +1,13 @@
 package ru.yandex.practicum.mymarket.payment.controller;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.payment.api.PaymentApi;
 import ru.yandex.practicum.mymarket.payment.domain.BalanceResponse;
-import ru.yandex.practicum.mymarket.payment.domain.ErrorResponse;
 import ru.yandex.practicum.mymarket.payment.domain.PaymentRequest;
 import ru.yandex.practicum.mymarket.payment.domain.PaymentSuccessResponse;
-import ru.yandex.practicum.mymarket.payment.exception.InsufficientFundsException;
 import ru.yandex.practicum.mymarket.payment.service.PaymentService;
 
 @RestController
