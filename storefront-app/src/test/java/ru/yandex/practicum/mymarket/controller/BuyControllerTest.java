@@ -1,11 +1,9 @@
 package ru.yandex.practicum.mymarket.controller;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -15,7 +13,8 @@ import ru.yandex.practicum.mymarket.service.OrdersService;
 
 import java.nio.charset.StandardCharsets;
 
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @WebFluxTest(BuyController.class)
@@ -24,20 +23,10 @@ class BuyControllerTest {
     @Autowired
     private WebTestClient webTestClient;
 
-//    @Autowired
-//    private ApplicationContext applicationContext;
-
     @MockBean
     private OrdersService ordersService;
 
     private final String cartId = "cart-webflux-test-123";
-
-//    @BeforeEach
-//    void setUp() {
-//        this.webTestClient = WebTestClient.bindToApplicationContext(applicationContext)
-//                .configureClient()
-//                .build();
-//    }
 
     @Test
     void buy_Success_ShouldRedirectToOrderDetails() {

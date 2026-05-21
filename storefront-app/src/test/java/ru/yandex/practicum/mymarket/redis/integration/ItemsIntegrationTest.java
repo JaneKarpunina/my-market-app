@@ -100,7 +100,6 @@ public class ItemsIntegrationTest {
         StepVerifier.create(redisTemplate.opsForList().range(expectedPageKey, 0, -1).collectList())
                 .assertNext(ids -> {
                     assertEquals(2, ids.size());
-                    // Вспоминаем фикс ClassCastException: Jackson может вернуть Integer, приводим типы
                     assertEquals(1, ((Number) ids.get(0)).intValue());
                     assertEquals(2, ((Number) ids.get(1)).intValue());
                 })
