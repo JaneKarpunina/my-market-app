@@ -2,9 +2,14 @@
 
 ### Как запускать проект
 
-- В терминале из корня проекта запустить mvn spring-boot:run
-- Для сборки исполняемого Jar файла нужно запустить из корня проекта команду mvn clean package. Затем запустить jar файл командой java -jar my-market-app-0.0.1-SNAPSHOT.jar
-- Для запуска проекта в докер необходимо собрать образ выполнив из корня проекта команду  docker build -t my-market-app . и затем запустить контейнер командой docker run -p 8080:8080 my-market-app
+- В терминале запустить docker контейнер redis командой docker run -p 6379:6379 -d cr.yandex/mirror/redis:latest 
+- из корня проекта запустить mvn spring-boot:run -pl payment-service и mvn spring-boot:run -pl storefront-app
+- Приложение открыть по адресу http://localhost:8080
+
+### Как запускать проект с помощью docker compose
+
+- Из корня проекта выполнить команду mvn clean package
+- Из корня проекта выполнить команду docker compose up --build
 
 ### Как запускать тесты 
 

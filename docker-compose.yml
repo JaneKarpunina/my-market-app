@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  redis:
+  redis-reactive:
     image: cr.yandex/mirror/redis:latest
     container_name: redis-reactive
     ports:
@@ -20,7 +20,7 @@ services:
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
     depends_on:
-      - redis
+      - redis-reactive
     networks:
       - market-network
 
@@ -33,11 +33,11 @@ services:
       - "8080:8080"
     environment:
       - PAYMENT_SERVICE_URL=http://payment-service:8081
-      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_HOST=redis-reactive
       - SPRING_DATA_REDIS_PORT=6379
     depends_on:
       - payment-service
-      - redis
+      - redis-reactive
     networks:
       - market-network
 
