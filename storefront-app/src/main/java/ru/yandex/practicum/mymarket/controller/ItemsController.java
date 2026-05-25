@@ -8,6 +8,7 @@ import org.springframework.web.reactive.result.view.Rendering;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemChangeRequest;
+import ru.yandex.practicum.mymarket.service.CartService;
 import ru.yandex.practicum.mymarket.service.ItemsService;
 
 @Controller
@@ -16,8 +17,11 @@ public class ItemsController {
 
     private final ItemsService itemsService;
 
-    public ItemsController(ItemsService itemsService) {
+    private final CartService cartService;
+
+    public ItemsController(ItemsService itemsService, CartService cartService) {
         this.itemsService = itemsService;
+        this.cartService = cartService;
     }
 
     @PostMapping
@@ -26,7 +30,7 @@ public class ItemsController {
             @CookieValue(value = "cartId", required = false) String cartId,
             ServerHttpResponse response) {
 
-        return itemsService.changeItemsCount(request.getId(), request.getAction(), response, cartId)
+        return cartService.changeItemsCount(request.getId(), request.getAction(), response, cartId)
                 .then(Mono.fromCallable(() ->
                         UriComponentsBuilder.fromPath("/items")
                                 .queryParam("search", request.getSearch())
@@ -57,7 +61,7 @@ public class ItemsController {
                                               ItemChangeRequest request,
                                               ServerHttpResponse response) {
 
-        return itemsService.changeItemsCount(id, request.getAction(), response, cartId)
+        return cartService.changeItemsCount(id, request.getAction(), response, cartId)
                 .then(Mono.defer(() ->
                     itemsService.getItemWithQuantity(id, cartId)
                 ))

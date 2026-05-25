@@ -10,6 +10,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import reactor.core.publisher.Flux;
@@ -65,14 +66,14 @@ public class AddItemServiceTest {
         when(mockFile.transferTo(any(Path.class))).thenReturn(Mono.empty());
         when(productRepository.save(any())).thenReturn(Mono.just(new Product()));
 
-        when(redisTemplate.keys("page:s:*")).thenReturn(Flux.just("page:s:1", "page:s:2"));
+        when(redisTemplate.scan(any(ScanOptions.class))).thenReturn(Flux.just("page:s:1", "page:s:2"));
         when(redisTemplate.unlink(any(String[].class))).thenReturn(Mono.just(2L));
 
         StepVerifier.create(addItemService.addItem(TITLE, DESC, PRICE, mockFile))
                 .verifyComplete();
 
         verify(productRepository, times(1)).save(any());
-        verify(redisTemplate, times(1)).keys("page:s:*");
+        verify(redisTemplate, times(1)).scan(any(ScanOptions.class));
         verify(redisTemplate, times(1)).unlink(any(String[].class));
     }
 

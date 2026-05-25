@@ -1,6 +1,8 @@
 package ru.yandex.practicum.mymarket.service;
 
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -13,24 +15,21 @@ import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.entity.Cart;
 import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.entity.Product;
+import ru.yandex.practicum.mymarket.enums.CartAction;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.CartRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
+
+import static ru.yandex.practicum.mymarket.enums.CartAction.*;
 
 @Service
 public class CartService {
 
-    public static final String PLUS = "PLUS";
-    public static final String MINUS = "MINUS";
-    public static final String DELETE = "DELETE";
-    public static final int TTL_PRODUCT = 3;
+    public static final int PRODUCT_CACHE_TTL_MINUTES = 3;
 
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
@@ -121,7 +120,7 @@ public class CartService {
                     return redisTemplate.opsForValue().multiSet(toCache)
                             .then(Mono.defer(() -> Flux.fromIterable(toCache.keySet())
                                     .flatMap(key -> redisTemplate
-                                            .expire(key, Duration.ofMinutes(TTL_PRODUCT)))
+                                            .expire(key, Duration.ofMinutes(PRODUCT_CACHE_TTL_MINUTES)))
                                     .then()))
                             .thenReturn(dbProducts);
                 });
@@ -148,17 +147,19 @@ public class CartService {
     @Transactional
     public Mono<Void> changeItemQuantity(Long id, String action, String cartId) {
 
+        CartAction cartAction = CartAction.valueOf(action);
+
         return cartItemRepository.findByCartIdAndProductId(cartId, id)
                 .flatMap(cartItem -> {
                     int quantity = cartItem.getQuantity();
-                    if (quantity == 1 && MINUS.equals(action) || DELETE.equals(action)) {
+                    if (quantity == 1 && MINUS == cartAction || DELETE == cartAction) {
                         return cartItemRepository.delete(cartItem);
                     }
-                    else if (quantity > 1 && MINUS.equals(action)) {
+                    else if (quantity > 1 && MINUS == cartAction) {
                         cartItem.setQuantity(quantity - 1);
                         return cartItemRepository.save(cartItem);
                     }
-                    else if (quantity < Integer.MAX_VALUE && PLUS.equals(action)) {
+                    else if (quantity < Integer.MAX_VALUE && PLUS == cartAction) {
                         cartItem.setQuantity(quantity + 1);
                         return cartItemRepository.save(cartItem);
                     }
@@ -193,4 +194,92 @@ public class CartService {
                     return new CartDetailedResponse(cart, balance, canOrder, error);
                 });
     }
+
+    @Transactional
+    public Mono<Void> changeItemsCount(Long id, String action, ServerHttpResponse response, String cartId) {
+
+        CartAction cartAction = CartAction.valueOf(action);
+
+        return productRepository.findById(id)
+                .flatMap(product -> {
+                    // Если cartId нет и действие PLUS — создаем новую корзину
+                    if (cartId == null || cartId.isEmpty()) {
+                        if (PLUS == cartAction) {
+                            String newCartId = UUID.randomUUID().toString();
+                            addCartCookie(response, newCartId);
+                            return createCartAndItem(id, newCartId);
+                        }
+                        return Mono.empty();
+                    }
+
+                    return cartRepository.findById(cartId)
+                            // Если кука есть, но корзины в БД нет (например, удалена)
+                            .switchIfEmpty(Mono.defer(() -> {
+                                if (PLUS == cartAction) {
+                                    return createCartAndItem(id, cartId).then(Mono.empty());
+                                }
+                                return Mono.empty();
+                            }))
+                            .flatMap(cart -> setCartItem(id, action, cartId));
+
+
+                });
+    }
+
+    private void addCartCookie(ServerHttpResponse response, String cartId) {
+        ResponseCookie cookie = ResponseCookie.from("cartId", cartId)
+                .maxAge(Duration.ofDays(7))
+                .path("/")
+                .httpOnly(true)
+                .build();
+        response.addCookie(cookie);
+    }
+
+    private Mono<Void> createCartAndItem(Long id, String cartId) {
+        Cart cart = new Cart();
+        cart.setId(cartId);
+
+        return cartRepository.save(cart)
+                .then(Mono.defer(() -> {
+                    CartItem item = new CartItem();
+                    item.setCartId(cartId);
+                    item.setProductId(id);
+                    item.setQuantity(1);
+                    // version и id не трогаем, они останутся null
+                    return cartItemRepository.save(item); }))
+                .then();
+    }
+
+    private Mono<Void> setCartItem(Long id, String action, String cartId) {
+
+        CartAction cartAction = CartAction.valueOf(action);
+        return cartItemRepository.findByCartIdAndProductId(cartId, id)
+                .switchIfEmpty(Mono.defer(() -> {
+                    if (PLUS == cartAction) {
+                        return cartItemRepository.save(new CartItem(null, cartId, id, 1, null))
+                                .then(Mono.empty());
+                    }
+                    return Mono.empty();
+                }))
+                .flatMap(cartItem -> {
+                    int quantity = cartItem.getQuantity();
+
+                    if (quantity == 1 && MINUS == cartAction) {
+                        return cartItemRepository.delete(cartItem);
+                    }
+
+                    CartItem updatedItem = null;
+                    if (quantity > 1 && MINUS == cartAction) {
+                        cartItem.setQuantity(quantity - 1);
+                        updatedItem = cartItem;
+                    } else if (quantity < Integer.MAX_VALUE && PLUS == cartAction) {
+                        cartItem.setQuantity(quantity + 1);
+                        updatedItem = cartItem;
+                    }
+
+                    return updatedItem != null ? cartItemRepository.save(updatedItem) : Mono.empty();
+                })
+                .then();
+    }
+
 }

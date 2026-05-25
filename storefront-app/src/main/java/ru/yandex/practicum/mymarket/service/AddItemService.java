@@ -4,6 +4,7 @@ import org.apache.tika.Tika;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -124,9 +125,12 @@ public class AddItemService {
     }
 
     private Mono<Void> invalidateCatalogPages() {
-        String pattern = "page:s:*";
+        ScanOptions options = ScanOptions.scanOptions()
+                .match("page:s:*")
+                .count(100)
+                .build();
 
-        return redisTemplate.keys(pattern)
+        return redisTemplate.scan(options)
                 .collectList()
                 .flatMap(keys -> {
                     if (keys.isEmpty()) {

@@ -2,22 +2,24 @@ package ru.yandex.practicum.mymarket.payment.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.yandex.practicum.mymarket.payment.domain.BalanceResponse;
 import ru.yandex.practicum.mymarket.payment.exception.InsufficientFundsException;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
+@SpringBootTest(classes = PaymentService.class)
 public class BalanceServiceTest {
 
+    @Autowired
     private PaymentService balanceService;
 
     @BeforeEach
     void setUp() {
-        balanceService = new PaymentService();
         ReflectionTestUtils.setField(balanceService, "maxBalanceAmount", 10000L);
     }
 
@@ -29,8 +31,8 @@ public class BalanceServiceTest {
                 .assertNext(response -> {
                     assertNotNull(response);
                     assertNotNull(response.getAmount());
-                    assertTrue(response.getAmount() >= 0 && response.getAmount() <= 10000,
-                            "Баланс должен быть от 0 до 10000");
+                    assertEquals(10000, (long) response.getAmount(),
+                            "Баланс должен быть 10000");
                 })
                 .verifyComplete();
     }

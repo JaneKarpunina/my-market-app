@@ -5,8 +5,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.data.redis.core.ReactiveValueOperations;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.util.LinkedMultiValueMap;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -30,6 +34,7 @@ import static org.mockito.Mockito.*;
 public class CartServiceTest extends BaseTest {
 
     @Autowired
+    @SpyBean
     private CartService cartService;
 
     @MockBean
@@ -43,6 +48,9 @@ public class CartServiceTest extends BaseTest {
 
     @MockBean
     private ReactiveValueOperations<String, Object> valueOperations;
+
+    @MockBean
+    private ServerHttpResponse response;
 
     private final Long productId = 1L;
     private final String cartId = "test-cart-123";
@@ -261,14 +269,13 @@ public class CartServiceTest extends BaseTest {
 
         CartDto mockCart = new CartDto(List.of(), 1000L);
 
-        CartService testService = spy(cartService);
-        doReturn(Mono.just(mockCart)).when(testService).getCartDto(cartId);
+        doReturn(Mono.just(mockCart)).when(cartService).getCartDto(cartId);
 
         BalanceResponse mockBalance = new BalanceResponse();
         mockBalance.setAmount(1500L);
         when(paymentApi.getBalance()).thenReturn(Mono.just(mockBalance));
 
-        Mono<CartDetailedResponse> result = testService.getCartDetailed(cartId);
+        Mono<CartDetailedResponse> result = cartService.getCartDetailed(cartId);
 
         StepVerifier.create(result)
                 .assertNext(response -> {
@@ -285,15 +292,14 @@ public class CartServiceTest extends BaseTest {
     void getCartDetailed_Failed_WhenInsufficientFunds() {
         CartDto mockCart = new CartDto(List.of(), 1000L);
 
-        CartService testService = spy(cartService);
-        doReturn(Mono.just(mockCart)).when(testService).getCartDto(cartId);
+        doReturn(Mono.just(mockCart)).when(cartService).getCartDto(cartId);
 
         // Настраиваем маленький баланс (400 < 1000)
         BalanceResponse mockBalance = new BalanceResponse();
         mockBalance.setAmount(400L);
         when(paymentApi.getBalance()).thenReturn(Mono.just(mockBalance));
 
-        Mono<CartDetailedResponse> result = testService.getCartDetailed(cartId);
+        Mono<CartDetailedResponse> result = cartService.getCartDetailed(cartId);
 
         StepVerifier.create(result)
                 .assertNext(response -> {
@@ -309,13 +315,12 @@ public class CartServiceTest extends BaseTest {
     void getCartDetailed_Failed_WhenPaymentServiceThrowsException() {
         CartDto mockCart = new CartDto(List.of(), 1000L);
 
-        CartService testService = spy(cartService);
-        doReturn(Mono.just(mockCart)).when(testService).getCartDto(cartId);
+        doReturn(Mono.just(mockCart)).when(cartService).getCartDto(cartId);
 
         // Имитируем сетевую ошибку WebClient (сервис платежей недоступен)
         when(paymentApi.getBalance()).thenReturn(Mono.error(new RuntimeException("Timeout")));
 
-        Mono<CartDetailedResponse> result = testService.getCartDetailed(cartId);
+        Mono<CartDetailedResponse> result = cartService.getCartDetailed(cartId);
 
         // Проверяем, что .onErrorReturn(-1L) корректно перехватил ошибку
         StepVerifier.create(result)
@@ -327,6 +332,86 @@ public class CartServiceTest extends BaseTest {
                 })
                 .verifyComplete();
     }
+
+    @Test
+    void changeItemsCount_NewCartCreation() {
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(cartRepository.save(any(Cart.class))).thenReturn(Mono.just(new Cart()));
+        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(new CartItem()));
+
+        when(response.getCookies()).thenReturn(new LinkedMultiValueMap<>());
+
+        StepVerifier.create(cartService.changeItemsCount(productId, "PLUS", response, null))
+                .verifyComplete();
+
+        verify(cartRepository).save(any(Cart.class));
+        verify(cartItemRepository).save(any(CartItem.class));
+        verify(response).addCookie(any(ResponseCookie.class));
+    }
+
+    @Test
+    void changeItemsCount_IncrementExistingItem() {
+        CartItem existingItem = new CartItem(10L, cartId, productId, 1, 0L);
+
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(cartRepository.findById(cartId)).thenReturn(Mono.just(new Cart()));
+        when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.just(existingItem));
+        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(existingItem));
+
+        StepVerifier.create(cartService.changeItemsCount(productId, "PLUS", response, cartId))
+                .verifyComplete();
+
+        verify(cartItemRepository).save(argThat(item -> item.getQuantity() == 2));
+    }
+
+    @Test
+    void changeItemsCount_CartNotFoundInDb_CreateNew() {
+        String existingCartId = "expired-cart-id";
+
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(cartRepository.findById(existingCartId)).thenReturn(Mono.empty());
+
+        when(cartRepository.save(any(Cart.class))).thenReturn(Mono.just(new Cart()));
+        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(new CartItem()));
+
+        StepVerifier.create(cartService.changeItemsCount(productId, "PLUS", response, existingCartId))
+                .verifyComplete();
+
+        verify(cartRepository).save(argThat(cart -> cart.getId().equals(existingCartId)));
+        verify(cartItemRepository).save(argThat(item -> item.getProductId().equals(productId)));
+
+
+        verify(response, times(0)).addCookie(any());
+    }
+
+    @Test
+    void changeItemsCount_RemoveItemOnMinus() {
+
+        CartItem existingItem = new CartItem(10L, cartId, productId, 1, 0L);
+
+        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
+        when(cartRepository.findById(cartId)).thenReturn(Mono.just(new Cart()));
+        when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.just(existingItem));
+        when(cartItemRepository.delete(existingItem)).thenReturn(Mono.empty());
+
+        StepVerifier.create(cartService.changeItemsCount(productId, "MINUS", response, cartId))
+                .verifyComplete();
+
+        verify(cartItemRepository).delete(existingItem);
+    }
+
+    @Test
+    void changeItemsCount_ProductNotFound() {
+
+        when(productRepository.findById(productId)).thenReturn(Mono.empty());
+
+        StepVerifier.create(cartService.changeItemsCount(productId, "PLUS", response, cartId))
+                .verifyComplete();
+
+        verifyNoInteractions(cartRepository);
+        verifyNoInteractions(cartItemRepository);
+    }
+
 
 
 

@@ -11,7 +11,6 @@ import reactor.test.StepVerifier;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
 @DataR2dbcTest
@@ -41,33 +40,7 @@ public class ProductRepositoryTest {
                 .verifyComplete();
     }
 
-    @Test
-    void findProductWithQuantity_Success() {
-        String cartId = "cart-2";
-        insertProduct(10L, "Sony TV", "4K Display", 1500L);
-        insertCartItem(cartId, 10L, 1);
 
-        productRepository.findProductWithQuantity(10L, cartId)
-                .as(StepVerifier::create)
-                .assertNext(item -> {
-                    assertEquals("Sony TV", item.getTitle());
-                    assertEquals(1, item.getCount());
-                })
-                .verifyComplete();
-    }
-
-    @Test
-    void findProductWithZeroCartId_Success() {
-        insertProduct(5L, "Table", "Furniture", 200L);
-
-        productRepository.findProductWithZeroCartId(5L)
-                .as(StepVerifier::create)
-                .assertNext(item -> {
-                    assertEquals("Table", item.getTitle());
-                    assertEquals(0, item.getCount());
-                })
-                .verifyComplete();
-    }
 
     @Test
     void shouldFindIdsBySearchTermWithAlphabeticalOrder() {

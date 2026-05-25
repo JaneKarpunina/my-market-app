@@ -18,12 +18,14 @@ import ru.yandex.practicum.mymarket.domain.PaymentRequest;
 import ru.yandex.practicum.mymarket.domain.PaymentSuccessResponse;
 import ru.yandex.practicum.mymarket.dto.CartDto;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
-import ru.yandex.practicum.mymarket.dto.OrderFlatRow;
+import ru.yandex.practicum.mymarket.dto.OrderDto;
 import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.entity.Order;
 import ru.yandex.practicum.mymarket.entity.OrderItem;
+import ru.yandex.practicum.mymarket.entity.Product;
 import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderRepository;
+import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -48,6 +50,9 @@ public class OrdersServiceTest extends BaseTest {
     private OrderItemRepository orderItemRepository;
 
     @MockBean
+    private ProductRepository productRepository;
+
+    @MockBean
     private ServerHttpResponse response;
 
     @MockBean
@@ -69,64 +74,89 @@ public class OrdersServiceTest extends BaseTest {
     }
 
     @Test
-    void getOrders_Success() {
+    void getOrders_ShouldReturnFluxOfOrderDtos_WhenItemsExist() {
 
-        OrderFlatRow row1 = new OrderFlatRow(1L, 100L, 1, 500L, "Product A");
-        OrderFlatRow row2 = new OrderFlatRow(2L, 100L, 2, 250L, "Product B"); // Заказ 100, Товар B (итого 500+500=1000)
-        OrderFlatRow row3 = new OrderFlatRow(3L, 200L, 1, 300L, "Product C"); // Заказ 200, Товар C (итого 300)
+        OrderItem item1 = new OrderItem(1L, 100L, 10L, 2, 1L);
+        OrderItem item2 = new OrderItem(2L, 100L, 20L, 1, 1L);
 
-        when(orderRepository.findAllOrdersWithItems()).thenReturn(Flux.just(row1, row2, row3));
+        Product product1 = new Product(10L, "Товар 1", "Описание 1",
+                "img1.jpg", 500L, 1L);
+        Product product2 = new Product(20L, "Товар 2", "Описание 2",
+                "img2.jpg", 300L, 1L);
 
-        StepVerifier.create(ordersService.getOrders())
-                .assertNext(order -> {
-                    assertEquals(100L, order.getId());
-                    assertEquals(2, order.getItems().size());
-                    assertEquals(1000L, order.getTotalSum());
-                })
-                .assertNext(order -> {
-                    assertEquals(200L, order.getId());
-                    assertEquals(1, order.getItems().size());
-                    assertEquals(300L, order.getTotalSum());
+        OrderItem itemFromAnotherOrder = new OrderItem(3L, 200L, 10L, 1, 1L);
+
+        when(orderItemRepository.findAll()).thenReturn(Flux.just(item1, item2, itemFromAnotherOrder));
+        when(productRepository.findByIdIn(any())).thenReturn(Flux.just(product1, product2));
+
+        Flux<OrderDto> resultFlux = ordersService.getOrders();
+
+        StepVerifier.create(resultFlux)
+                .recordWith(java.util.ArrayList::new)
+                .expectNextCount(2)
+                .consumeRecordedWith(orders -> {
+                    OrderDto order100 = orders.stream()
+                            .filter(o -> o.getId().equals(100L)).findFirst().orElseThrow();
+                    assertEquals(2, order100.getItems().size());
+                    assertEquals(1300L, order100.getTotalSum());
+
+                    OrderDto order200 = orders.stream()
+                            .filter(o -> o.getId().equals(200L)).findFirst().orElseThrow();
+                    assertEquals(1, order200.getItems().size());
+                    assertEquals(500L, order200.getTotalSum());
                 })
                 .verifyComplete();
-
     }
 
     @Test
-    void getOrders_Empty() {
-        when(orderRepository.findAllOrdersWithItems()).thenReturn(Flux.empty());
+    void getOrders_ShouldReturnEmptyFlux_WhenNoItemsFound() {
+        when(orderItemRepository.findAll()).thenReturn(Flux.empty());
 
-        StepVerifier.create(ordersService.getOrders())
+        Flux<OrderDto> resultFlux = ordersService.getOrders();
+
+        StepVerifier.create(resultFlux)
+                .expectNextCount(0)
                 .verifyComplete();
     }
 
     @Test
-    void getOrder_Success() {
-        Long orderId = 1L;
-        OrderFlatRow row1 = new OrderFlatRow(10L, orderId, 2, 100L,  "Product A"); // 2 * 100 = 200
-        OrderFlatRow row2 = new OrderFlatRow(20L, orderId, 1, 500L, "Product B"); // 1 * 500 = 500
+    void getOrder_ShouldReturnOrderDtoWithItems_WhenOrderExists() {
 
-        when(orderRepository.getOrder(orderId)).thenReturn(Flux.just(row1, row2));
+        OrderItem item1 = new OrderItem(1L, 100L, 10L, 2, 1L);
+        OrderItem item2 = new OrderItem(2L, 100L, 20L, 1, 1L);
 
-        StepVerifier.create(ordersService.getOrder(orderId))
+        Product product1 = new Product(10L, "Товар 1", "Описание 1",
+                "img1.jpg", 500L, 1L);
+        Product product2 = new Product(20L, "Товар 2", "Описание 2",
+                "img2.jpg", 300L, 1L);
+
+        when(orderItemRepository.findByOrderId(100L)).thenReturn(Flux.just(item1, item2));
+        when(productRepository.findByIdIn(any())).thenReturn(Flux.just(product1, product2));
+
+
+        Mono<OrderDto> resultMono = ordersService.getOrder(100L);
+
+        StepVerifier.create(resultMono)
                 .assertNext(orderDto -> {
-                    assertEquals(orderId, orderDto.getId());
+                    assertEquals(100L, orderDto.getId());
                     assertEquals(2, orderDto.getItems().size());
-                    assertEquals(700L, orderDto.getTotalSum()); // 200 + 500
+                    assertEquals(1300L, orderDto.getTotalSum());
 
                     ItemDto firstItem = orderDto.getItems().getFirst();
-                    assertEquals("Product A", firstItem.getTitle());
+                    assertEquals("Товар 1", firstItem.getTitle());
                     assertEquals(2, firstItem.getCount());
                 })
                 .verifyComplete();
     }
 
     @Test
-    void getOrder_NotFound() {
-        Long orderId = 999L;
-        when(orderRepository.getOrder(orderId)).thenReturn(Flux.empty());
+    void getOrder_ShouldReturnEmptyOrderDto_WhenOrderDoesNotExist() {
 
-        StepVerifier.create(ordersService.getOrder(orderId))
+        when(orderItemRepository.findByOrderId(999L)).thenReturn(Flux.empty());
+
+        Mono<OrderDto> resultMono = ordersService.getOrder(999L);
+
+        StepVerifier.create(resultMono)
                 .assertNext(orderDto -> {
                     assertNull(orderDto.getId());
                     assertNull(orderDto.getItems());
@@ -134,6 +164,7 @@ public class OrdersServiceTest extends BaseTest {
                 })
                 .verifyComplete();
     }
+
 
     @Test
     void saveOrder_Success() {

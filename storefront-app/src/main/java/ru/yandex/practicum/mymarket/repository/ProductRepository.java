@@ -5,8 +5,9 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.entity.Product;
+
+import java.util.Collection;
 
 @Repository
 public interface ProductRepository extends ReactiveCrudRepository<Product, Long> {
@@ -27,20 +28,6 @@ public interface ProductRepository extends ReactiveCrudRepository<Product, Long>
             """)
     Mono<Long> countByTitleAndDescription(String search);
 
+    Flux<Product> findByIdIn(Collection<Long> ids);
 
-    @Query("""
-            SELECT p.*
-            FROM product p
-            WHERE p.id = :id
-            """)
-    Mono<ItemDto> findProductWithZeroCartId(Long id);
-
-    @Query("""
-            SELECT p.*,
-            COALESCE(c.quantity, 0) as count
-            FROM product p
-            LEFT JOIN cart_item c ON c.product_id = p.id AND c.cart_id = :cartId
-            WHERE p.id = :id
-            """)
-    Mono<ItemDto> findProductWithQuantity(Long id, String cartId);
 }

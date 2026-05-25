@@ -10,6 +10,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.reactive.function.BodyInserters;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
+import ru.yandex.practicum.mymarket.service.CartService;
 import ru.yandex.practicum.mymarket.service.ItemsService;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -27,11 +28,14 @@ public class ItemsControllerTest {
     @MockBean
     ItemsService itemsService;
 
+    @MockBean
+    CartService cartService;
+
     private final String cartId = "test-cart";
 
     @Test
     void changeItemQuantity_RedirectWithParams() {
-        when(itemsService.changeItemsCount(anyLong(), anyString(), any(ServerHttpResponse.class), anyString()))
+        when(cartService.changeItemsCount(anyLong(), anyString(), any(ServerHttpResponse.class), anyString()))
                 .thenReturn(Mono.empty());
 
         webTestClient.post()
@@ -48,7 +52,7 @@ public class ItemsControllerTest {
                 .expectStatus().is3xxRedirection()
                 .expectHeader().valueEquals("Location", "/items?search=phone&sort=PRICE&pageNumber=2&pageSize=10");
 
-        verify(itemsService).changeItemsCount(eq(1L), eq("PLUS"), any(), eq(cartId));
+        verify(cartService).changeItemsCount(eq(1L), eq("PLUS"), any(), eq(cartId));
     }
 
     @Test
@@ -80,7 +84,7 @@ public class ItemsControllerTest {
         updatedItem.setId(1L);
         updatedItem.setCount(5);
 
-        when(itemsService.changeItemsCount(anyLong(), anyString(), any(ServerHttpResponse.class), anyString()))
+        when(cartService.changeItemsCount(anyLong(), anyString(), any(ServerHttpResponse.class), anyString()))
                 .thenReturn(Mono.empty());
         when(itemsService.getItemWithQuantity(1L, cartId)).thenReturn(Mono.just(updatedItem));
 
@@ -97,7 +101,7 @@ public class ItemsControllerTest {
                     assertNotNull(body);
                     assertTrue(body.contains("5"));
                 });
-        verify(itemsService).changeItemsCount(eq(1L), eq("PLUS"), any(), eq(cartId));
+        verify(cartService).changeItemsCount(eq(1L), eq("PLUS"), any(), eq(cartId));
         verify(itemsService).getItemWithQuantity(1L, cartId);
     }
 

@@ -7,7 +7,10 @@ services:
     ports:
       - "6379:6379"
     networks:
-      - market-network
+      market-network:
+        aliases:
+          - redis-reactive
+          - redis
 
   payment-service:
     build:
@@ -17,12 +20,14 @@ services:
     ports:
       - "8081:8081"
     environment:
-      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_HOST=redis-reactive
       - SPRING_DATA_REDIS_PORT=6379
     depends_on:
       - redis-reactive
     networks:
-      - market-network
+      market-network:
+        aliases:
+          - payment-service
 
   storefront-app:
     build:
@@ -39,7 +44,9 @@ services:
       - payment-service
       - redis-reactive
     networks:
-      - market-network
+      market-network:
+        aliases:
+          - storefront-app
 
 networks:
   market-network:

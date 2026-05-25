@@ -1,12 +1,13 @@
 package ru.yandex.practicum.mymarket.payment.service;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.payment.domain.BalanceResponse;
 import ru.yandex.practicum.mymarket.payment.exception.InsufficientFundsException;
 
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class PaymentService {
@@ -14,23 +15,36 @@ public class PaymentService {
     @Value("${app.balance.max-amount:10000}")
     private long maxBalanceAmount;
 
+    private final AtomicLong currentBalance = new AtomicLong();
+
+    @PostConstruct
+    public void init() {
+        currentBalance.set(maxBalanceAmount);
+    }
+
     public Mono<BalanceResponse> getCurrentBalance() {
         return Mono.fromCallable(() -> {
-            long randomAmount = ThreadLocalRandom.current().nextLong(0, maxBalanceAmount + 1);
-
             BalanceResponse response = new BalanceResponse();
-            response.setAmount(randomAmount);
+            response.setAmount(currentBalance.get());
             return response;
         });
     }
 
     public Mono<Void> charge(Long amount) {
-        return getCurrentBalance()
-                .flatMap(balance -> {
-                    if (balance.getAmount() == null || balance.getAmount() < amount) {
-                        return Mono.error(new InsufficientFundsException("Недостаточно средств"));
+        return Mono.defer(() -> {
+            try {
+                currentBalance.updateAndGet(existingBalance -> {
+                    if (existingBalance < amount) {
+                        throw new InsufficientFundsException("Недостаточно средств");
                     }
-                    return Mono.empty();
+                    return existingBalance - amount;
                 });
+
+                return Mono.empty();
+
+            } catch (InsufficientFundsException e) {
+                return Mono.error(e);
+            }
+        });
     }
 }
