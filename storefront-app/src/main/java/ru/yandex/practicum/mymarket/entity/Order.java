@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Version;
+import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 
@@ -16,6 +17,9 @@ public class Order {
 
     @Id
     private Long id;
+
+    @Column("USER_ID")
+    private Long userId;
 
     @Version
     private Long version;

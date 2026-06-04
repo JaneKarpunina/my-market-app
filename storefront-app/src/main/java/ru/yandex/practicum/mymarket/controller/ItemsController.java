@@ -1,6 +1,7 @@
 package ru.yandex.practicum.mymarket.controller;
 
 import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -8,6 +9,7 @@ import org.springframework.web.reactive.result.view.Rendering;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemChangeRequest;
+import ru.yandex.practicum.mymarket.entity.User;
 import ru.yandex.practicum.mymarket.service.CartService;
 import ru.yandex.practicum.mymarket.service.ItemsService;
 
@@ -27,10 +29,9 @@ public class ItemsController {
     @PostMapping
     public Mono<String> changeItemQuantity(
             ItemChangeRequest request,
-            @CookieValue(value = "cartId", required = false) String cartId,
-            ServerHttpResponse response) {
+            @AuthenticationPrincipal User currentUser) { // Достаем текущего пользователя
 
-        return cartService.changeItemsCount(request.getId(), request.getAction(), response, cartId)
+        return cartService.changeItemsCount(request.getId(), request.getAction(), currentUser.getId())
                 .then(Mono.fromCallable(() ->
                         UriComponentsBuilder.fromPath("/items")
                                 .queryParam("search", request.getSearch())
@@ -42,12 +43,31 @@ public class ItemsController {
                 .map(url -> "redirect:" + url);
     }
 
+
+//    @PostMapping
+//    public Mono<String> changeItemQuantity(
+//            ItemChangeRequest request,
+//            @CookieValue(value = "cartId", required = false) String cartId,
+//            ServerHttpResponse response) {
+//
+//        return cartService.changeItemsCount(request.getId(), request.getAction(), response, cartId)
+//                .then(Mono.fromCallable(() ->
+//                        UriComponentsBuilder.fromPath("/items")
+//                                .queryParam("search", request.getSearch())
+//                                .queryParam("sort", request.getSort())
+//                                .queryParam("pageNumber", request.getPageNumber())
+//                                .queryParam("pageSize", request.getPageSize())
+//                                .toUriString()
+//                ))
+//                .map(url -> "redirect:" + url);
+//    }
+
     @GetMapping("/{id}")
     public Mono<String> getItem(@PathVariable Long id,
-                          @CookieValue(value = "cartId", required = false) String cartId,
+                                @AuthenticationPrincipal User currentUser,
                           Model model) {
 
-        return itemsService.getItemWithQuantity(id, cartId)
+        return itemsService.getItemWithQuantity(id, currentUser.getId())
                         .flatMap(item -> {
                             model.addAttribute("item", item);
                             return Mono.just("item");
@@ -57,13 +77,12 @@ public class ItemsController {
 
     @PostMapping("/{id}")
     public Mono<Rendering> changeItemQuantity(@PathVariable Long id,
-                                              @CookieValue(value = "cartId", required = false) String cartId,
                                               ItemChangeRequest request,
-                                              ServerHttpResponse response) {
+                                              @AuthenticationPrincipal User currentUser) {
 
-        return cartService.changeItemsCount(id, request.getAction(), response, cartId)
+        return cartService.changeItemsCount(id, request.getAction(), currentUser.getId())
                 .then(Mono.defer(() ->
-                    itemsService.getItemWithQuantity(id, cartId)
+                    itemsService.getItemWithQuantity(id, currentUser.getId())
                 ))
                 .map(item -> Rendering.view("item")
                         .modelAttribute("item", item)

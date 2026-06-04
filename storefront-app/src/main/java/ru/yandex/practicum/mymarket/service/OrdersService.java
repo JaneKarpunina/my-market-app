@@ -50,11 +50,26 @@ public class OrdersService {
     }
 
 
+//    @Transactional(readOnly = true)
+//    public Flux<OrderDto> getOrders() {
+//        return orderItemRepository.findAll()
+//                .collectList()
+//                .flatMapMany(this::processOrderItems);
+//    }
+
     @Transactional(readOnly = true)
-    public Flux<OrderDto> getOrders() {
-        return orderItemRepository.findAll()
+    public Flux<OrderDto> getOrders(Long userId) {
+        return orderRepository.findByUserId(userId)
+                .map(Order::getId)
                 .collectList()
-                .flatMapMany(this::processOrderItems);
+                .flatMapMany(orderIds -> {
+                    if (orderIds.isEmpty()) {
+                        return Flux.empty();
+                    }
+                    return orderItemRepository.findByOrderIdIn(orderIds)
+                            .collectList()
+                            .flatMapMany(this::processOrderItems);
+                });
     }
 
     private Flux<OrderDto> processOrderItems(List<OrderItem> allItems) {
@@ -111,12 +126,15 @@ public class OrdersService {
         return itemDto;
     }
 
-
     @Transactional(readOnly = true)
-    public Mono<OrderDto> getOrder(Long id) {
-        return orderItemRepository.findByOrderId(id)
-                .collectList()
-                .flatMap(items -> processSingleOrder(id, items));
+    public Mono<OrderDto> getOrder(Long id, Long userId) {
+        return orderRepository.findById(id)
+                .filter(order -> order.getUserId().equals(userId))
+                .flatMap(order -> orderItemRepository.findByOrderId(id)
+                        .collectList()
+                        .flatMap(items -> processSingleOrder(id, items))
+                )
+                .defaultIfEmpty(new OrderDto());
     }
 
     private Mono<OrderDto> processSingleOrder(Long id, List<OrderItem> items) {
@@ -131,16 +149,35 @@ public class OrdersService {
                 .map(productMap -> buildOrderDto(id, items, productMap));
     }
 
-    public Mono<Long> processOrder(String cartId, ServerHttpResponse response) {
+//    @Transactional(readOnly = true)
+//    public Mono<OrderDto> getOrder(Long id) {
+//        return orderItemRepository.findByOrderId(id)
+//                .collectList()
+//                .flatMap(items -> processSingleOrder(id, items));
+//    }
+//
+//    private Mono<OrderDto> processSingleOrder(Long id, List<OrderItem> items) {
+//        if (items.isEmpty()) {
+//            return Mono.just(new OrderDto());
+//        }
+//
+//        List<Long> productIds = extractUniqueProductIds(items);
+//
+//        return productRepository.findByIdIn(productIds)
+//                .collectMap(Product::getId)
+//                .map(productMap -> buildOrderDto(id, items, productMap));
+//    }
 
-        return cartService.getCartDto(cartId)
+    public Mono<Long> processOrder(Long userId) {
+
+        return cartService.getCartDto(userId)
                 .flatMap(cartDto -> {
 
                     PaymentRequest paymentRequest = new PaymentRequest();
                     paymentRequest.setAmount(cartDto.getTotal());
 
                     return paymentApi.processPayment(paymentRequest)
-                            .flatMap(paymentResponse -> saveOrder(cartId, response));
+                            .flatMap(paymentResponse -> saveOrder(userId));
                 })
                 .onErrorResume(WebClientResponseException.class, (WebClientResponseException ex) -> {
                     if (ex.getStatusCode().is4xxClientError()) {
@@ -152,25 +189,31 @@ public class OrdersService {
 
 
     @Transactional
-    public Mono<Long> saveOrder(String cartId, ServerHttpResponse response) {
+    public Mono<Long> saveOrder(Long userId) {
 
-        return orderRepository.save(new Order())
-                .flatMap(savedOrder ->
-                        cartItemRepository.findByCartId(cartId)
-                                .map(ci -> {
-                                    OrderItem oi = new OrderItem();
-                                    oi.setOrderId(savedOrder.getId());
-                                    oi.setProductId(ci.getProductId());
-                                    oi.setQuantity(ci.getQuantity());
-                                    return oi;
-                                })
-                                .collectList()
-                                .flatMap(orderItems -> orderItemRepository.saveAll(orderItems)
-                                        .collectList())
-                                .then(cartRepository.deleteById(cartId))
-                                .doOnSuccess(v -> deleteCookie(response))
-                                .thenReturn(savedOrder.getId())
-                );
+        return cartRepository.findByUserId(userId)
+                .flatMap(cart -> {
+                    Order newOrder = new Order();
+                    newOrder.setUserId(userId);
+
+                    return orderRepository.save(newOrder)
+                            .flatMap(savedOrder ->
+                                    cartItemRepository.findByCartId(cart.getId())
+                                            .map(ci -> {
+                                                OrderItem oi = new OrderItem();
+                                                oi.setOrderId(savedOrder.getId());
+                                                oi.setProductId(ci.getProductId());
+                                                oi.setQuantity(ci.getQuantity());
+                                                return oi;
+                                            })
+                                            .collectList()
+                                            .flatMap(orderItems ->
+                                                    orderItemRepository.saveAll(orderItems).collectList())
+                                            .then(cartRepository.delete(cart))
+                                            .thenReturn(savedOrder.getId())
+                            );
+                })
+                .switchIfEmpty(Mono.error(new RuntimeException("Корзина не найдена")));
     }
 
     private void deleteCookie(ServerHttpResponse response) {

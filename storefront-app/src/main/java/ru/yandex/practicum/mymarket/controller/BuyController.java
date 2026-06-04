@@ -1,6 +1,7 @@
 package ru.yandex.practicum.mymarket.controller;
 
 import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.util.UriUtils;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.entity.User;
 import ru.yandex.practicum.mymarket.service.OrdersService;
 
 import java.nio.charset.StandardCharsets;
@@ -24,10 +26,9 @@ public class BuyController {
 
 
     @PostMapping
-    public Mono<String> buy(@CookieValue(value = "cartId", required = false) String cartId,
-                            ServerHttpResponse response) {
+    public Mono<String> buy(@AuthenticationPrincipal User currentUser) {
 
-        return ordersService.processOrder(cartId, response)
+        return ordersService.processOrder(currentUser.getId())
                 .map(id -> "redirect:/orders/" + id + "?newOrder=true")
                 .onErrorResume(e ->
                     Mono.just("redirect:/cart/items?error=" +

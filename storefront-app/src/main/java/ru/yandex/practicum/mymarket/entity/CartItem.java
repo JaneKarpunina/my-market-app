@@ -18,7 +18,7 @@ public class CartItem {
     private Long id;
 
     @Column("CART_ID")
-    private String cartId;
+    private Long cartId;
 
     @Column("PRODUCT_ID")
     private Long productId;
