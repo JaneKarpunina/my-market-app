@@ -3,12 +3,15 @@ package ru.yandex.practicum.mymarket.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationSuccessHandler;
 import org.springframework.security.web.server.authentication.logout.RedirectServerLogoutSuccessHandler;
+import org.thymeleaf.extras.springsecurity6.dialect.SpringSecurityDialect;
+
 import java.net.URI;
 
 @Configuration
@@ -29,6 +32,7 @@ public class SecurityConfig {
                         .authenticated()
                         .anyExchange().permitAll()
                 )
+                .anonymous(Customizer.withDefaults())
                 .formLogin(form -> form
                                 .authenticationSuccessHandler(new RedirectServerAuthenticationSuccessHandler("/"))
                 )
@@ -44,6 +48,11 @@ public class SecurityConfig {
         RedirectServerLogoutSuccessHandler logoutSuccessHandler = new RedirectServerLogoutSuccessHandler();
         logoutSuccessHandler.setLogoutSuccessUrl(URI.create(uri));
         return logoutSuccessHandler;
+    }
+
+    @Bean
+    public SpringSecurityDialect springSecurityDialect() {
+        return new SpringSecurityDialect();
     }
 }
 
