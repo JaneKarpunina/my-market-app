@@ -67,7 +67,9 @@ public class ItemsController {
                                 @AuthenticationPrincipal User currentUser,
                           Model model) {
 
-        return itemsService.getItemWithQuantity(id, currentUser.getId())
+        Long userId = (currentUser != null) ? currentUser.getId() : null;
+
+        return itemsService.getItemWithQuantity(id, userId)
                         .flatMap(item -> {
                             model.addAttribute("item", item);
                             return Mono.just("item");

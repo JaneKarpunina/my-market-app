@@ -1,11 +1,13 @@
 package ru.yandex.practicum.mymarket.controller;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.entity.User;
 import ru.yandex.practicum.mymarket.service.ItemsService;
 
 @Controller
@@ -23,10 +25,12 @@ public class AllItemsController {
             @RequestParam(value = "sort", required = false, defaultValue = "NO") String sort,
             @RequestParam(value = "pageNumber", required = false, defaultValue = "1") int pageNumber,
             @RequestParam(value = "pageSize", required = false, defaultValue = "5") int pageSize,
-            @CookieValue(value = "cartId", required = false) String cartId,
+            @AuthenticationPrincipal User currentUser,
             Model model) {
 
-        return itemsService.getItemsWithPaging(search, sort, pageNumber, pageSize, cartId)
+        Long userId = (currentUser != null) ? currentUser.getId() : null;
+
+        return itemsService.getItemsWithPaging(search, sort, pageNumber, pageSize, userId)
                 .flatMap(itemsWithPaging -> {
                     model.addAttribute("items", itemsWithPaging.getItems());
                     model.addAttribute("search", search);

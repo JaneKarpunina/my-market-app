@@ -21,5 +21,5 @@ public interface CartItemRepository extends ReactiveCrudRepository<CartItem, Lon
             WHERE cart_id = :cartId
               AND product_id IN (:ids)
             """)
-    Flux<CartItem> findAllByCartIdAndProductIds(String cartId, List<Long> ids);
+    Flux<CartItem> findAllByCartIdAndProductIds(Long cartId, List<Long> ids);
 }
