@@ -3,7 +3,10 @@ package ru.yandex.practicum.mymarket.controller;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.reactive.result.view.Rendering;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemChangeRequest;
@@ -36,23 +39,6 @@ public class CartController {
                 .thenReturn("cart");
     }
 
-//    @GetMapping
-//    public Mono<String> getCart(@CookieValue(value = "cartId", required = false) String cartId,
-//                                @RequestParam(value = "error", required = false) String error,
-//                                Model model) {
-//
-//        return cartService.getCartDetailed(cartId)
-//                .doOnNext(data -> {
-//                    model.addAttribute("items", data.getCart().getItems());
-//                    model.addAttribute("total", data.getCart().getTotal());
-//                    model.addAttribute("canOrder", data.isCanOrder());
-//                    model.addAttribute("errorMessage", data.getErrorMessage());
-//                    model.addAttribute("error", error);
-//                })
-//                .thenReturn("cart");
-//
-//    }
-
     @PostMapping
     public Mono<Rendering> changeItemQuantity(
             ItemChangeRequest itemChangeRequest,
@@ -69,24 +55,6 @@ public class CartController {
                         .modelAttribute("errorMessage", data.getErrorMessage())
                         .build());
     }
-
-
-//    @PostMapping
-//    public Mono<Rendering> changeItemQuantity(
-//            ItemChangeRequest itemChangeRequest,
-//            @CookieValue(value = "cartId", required = false) String cartId)
-//             {
-//
-//        return cartService.changeItemQuantity(itemChangeRequest.getId(),
-//                itemChangeRequest.getAction(), cartId)
-//                .then(Mono.defer(() -> cartService.getCartDetailed(cartId)))
-//                .map(data -> Rendering.view("cart")
-//                        .modelAttribute("items",  data.getCart().getItems())
-//                        .modelAttribute("total", data.getCart().getTotal())
-//                        .modelAttribute("canOrder",  data.isCanOrder())
-//                        .modelAttribute("errorMessage", data.getErrorMessage())
-//                        .build());
-//    }
 
 
 }

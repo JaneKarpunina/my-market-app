@@ -1,12 +1,9 @@
 package ru.yandex.practicum.mymarket.controller;
 
-import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.util.UriUtils;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.entity.User;

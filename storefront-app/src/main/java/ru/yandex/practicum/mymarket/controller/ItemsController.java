@@ -1,10 +1,12 @@
 package ru.yandex.practicum.mymarket.controller;
 
-import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.reactive.result.view.Rendering;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
@@ -43,24 +45,6 @@ public class ItemsController {
                 .map(url -> "redirect:" + url);
     }
 
-
-//    @PostMapping
-//    public Mono<String> changeItemQuantity(
-//            ItemChangeRequest request,
-//            @CookieValue(value = "cartId", required = false) String cartId,
-//            ServerHttpResponse response) {
-//
-//        return cartService.changeItemsCount(request.getId(), request.getAction(), response, cartId)
-//                .then(Mono.fromCallable(() ->
-//                        UriComponentsBuilder.fromPath("/items")
-//                                .queryParam("search", request.getSearch())
-//                                .queryParam("sort", request.getSort())
-//                                .queryParam("pageNumber", request.getPageNumber())
-//                                .queryParam("pageSize", request.getPageSize())
-//                                .toUriString()
-//                ))
-//                .map(url -> "redirect:" + url);
-//    }
 
     @GetMapping("/{id}")
     public Mono<String> getItem(@PathVariable Long id,

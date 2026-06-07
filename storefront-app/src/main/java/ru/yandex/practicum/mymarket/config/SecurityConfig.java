@@ -12,8 +12,6 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationFailureHandler;
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationSuccessHandler;
 import org.springframework.security.web.server.authentication.logout.RedirectServerLogoutSuccessHandler;
-import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher;
-import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
 import org.thymeleaf.extras.springsecurity6.dialect.SpringSecurityDialect;
 
 import java.net.URI;
@@ -26,35 +24,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-//    @Bean
-//    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
-//        return http
-//                .authorizeExchange(exchanges -> exchanges
-//                        .pathMatchers(HttpMethod.POST, "/items", "/items/*").authenticated()
-//                        .pathMatchers("/add-item", "/item/add", "/cart/items", "/orders",
-//                                "/orders/*", "/buy")
-//                        .authenticated()
-//                        .anyExchange().permitAll()
-//                )
-//                .anonymous(Customizer.withDefaults())
-//                .formLogin(form -> form
-//                        .loginPage("/login")
-//                        .authenticationSuccessHandler(new RedirectServerAuthenticationSuccessHandler("/"))
-//                )
-//                .logout(logout -> logout
-//                        .logoutUrl("/logout")
-//                        .logoutSuccessHandler(logoutSuccessHandler("/"))
-//                )
-//                .exceptionHandling(exceptionHandling -> exceptionHandling
-//                        .authenticationEntryPoint((exchange, authException) -> {
-//                            exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
-//
-//                            return exchange.getResponse().setComplete();
-//                        })
-//                )
-//                .csrf(ServerHttpSecurity.CsrfSpec::disable)
-//                .build();
-//    }
 
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {

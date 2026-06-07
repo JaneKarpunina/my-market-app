@@ -32,21 +32,6 @@ public class OrdersController {
                         .build());
     }
 
-//    @GetMapping("/{id}")
-//    public Mono<String> getOrder(@PathVariable Long id,
-//                           @RequestParam(value = "newOrder", required = false, defaultValue = "false") boolean newOrder,
-//                           Model model) {
-//
-//        return ordersService.getOrder(id)
-//                .flatMap(orderDto -> {
-//                    model.addAttribute("order", orderDto);
-//                    model.addAttribute("newOrder", newOrder);
-//                    return Mono.just("order");
-//                });
-//
-//
-//    }
-
     @GetMapping("/{id}")
     public Mono<String> getOrder(@PathVariable Long id,
                                  @RequestParam(value = "newOrder", required = false, defaultValue = "false") boolean newOrder,

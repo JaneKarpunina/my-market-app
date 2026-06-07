@@ -18,11 +18,7 @@ public class MyMarketUserDetailsService implements ReactiveUserDetailsService {
     @Override
     public Mono<UserDetails> findByUsername(String username) {
         return userRepository.findByUsername(username)
-                .cast(UserDetails.class)
-                .doOnNext(userDetails ->
-                        System.out.println("Пользователь найден! Имя: [{}], Захэшированный пароль из БД: [{}]" +
-                                userDetails.getUsername() + " " + userDetails.getPassword())
-                );
+                .cast(UserDetails.class);
     }
 }
 

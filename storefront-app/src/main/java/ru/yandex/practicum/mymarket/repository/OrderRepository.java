@@ -5,8 +5,6 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import ru.yandex.practicum.mymarket.entity.Order;
 
-import java.util.Optional;
-
 @Repository
 public interface OrderRepository extends ReactiveCrudRepository<Order, Long> {
     Flux<Order> findByUserId(Long userId);

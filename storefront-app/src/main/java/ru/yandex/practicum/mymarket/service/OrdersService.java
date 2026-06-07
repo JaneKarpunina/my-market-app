@@ -50,13 +50,6 @@ public class OrdersService {
     }
 
 
-//    @Transactional(readOnly = true)
-//    public Flux<OrderDto> getOrders() {
-//        return orderItemRepository.findAll()
-//                .collectList()
-//                .flatMapMany(this::processOrderItems);
-//    }
-
     @Transactional(readOnly = true)
     public Flux<OrderDto> getOrders(Long userId) {
         return orderRepository.findByUserId(userId)
@@ -149,24 +142,6 @@ public class OrdersService {
                 .map(productMap -> buildOrderDto(id, items, productMap));
     }
 
-//    @Transactional(readOnly = true)
-//    public Mono<OrderDto> getOrder(Long id) {
-//        return orderItemRepository.findByOrderId(id)
-//                .collectList()
-//                .flatMap(items -> processSingleOrder(id, items));
-//    }
-//
-//    private Mono<OrderDto> processSingleOrder(Long id, List<OrderItem> items) {
-//        if (items.isEmpty()) {
-//            return Mono.just(new OrderDto());
-//        }
-//
-//        List<Long> productIds = extractUniqueProductIds(items);
-//
-//        return productRepository.findByIdIn(productIds)
-//                .collectMap(Product::getId)
-//                .map(productMap -> buildOrderDto(id, items, productMap));
-//    }
 
     public Mono<Long> processOrder(Long userId) {
 
@@ -214,14 +189,6 @@ public class OrdersService {
                             );
                 })
                 .switchIfEmpty(Mono.error(new RuntimeException("Корзина не найдена")));
-    }
-
-    private void deleteCookie(ServerHttpResponse response) {
-        ResponseCookie cookie = ResponseCookie.from("cartId", "")
-                .path("/")
-                .maxAge(0)
-                .build();
-        response.addCookie(cookie);
     }
 
 }
