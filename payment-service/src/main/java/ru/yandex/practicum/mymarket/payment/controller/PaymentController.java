@@ -21,7 +21,9 @@ public class PaymentController implements PaymentApi {
 
     @Override
     public Mono<ResponseEntity<BalanceResponse>> getBalance(ServerWebExchange exchange) {
-        return paymentService.getCurrentBalance()
+        String userId = exchange.getRequest().getHeaders().getFirst("X-User-Id");
+
+        return paymentService.getCurrentBalance(userId)
                 .map(ResponseEntity::ok);
     }
 
@@ -30,8 +32,10 @@ public class PaymentController implements PaymentApi {
             Mono<PaymentRequest> paymentRequest,
             ServerWebExchange exchange) {
 
+        String userId = exchange.getRequest().getHeaders().getFirst("X-User-Id");
+
         return paymentRequest
-                .flatMap(request -> paymentService.charge(request.getAmount()))
+                .flatMap(request -> paymentService.charge(userId, request.getAmount()))
                 .then(Mono.just(ResponseEntity.ok(new PaymentSuccessResponse().status("success"))));
 
     }
