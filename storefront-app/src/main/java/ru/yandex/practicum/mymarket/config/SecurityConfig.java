@@ -29,10 +29,9 @@ public class SecurityConfig {
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         return http
                 .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers(HttpMethod.POST, "/items", "/items/*").authenticated()
-                        .pathMatchers("/add-item", "/item/add", "/cart/items", "/orders",
-                                "/orders/*", "/buy").authenticated()
-                        .anyExchange().permitAll()
+                        .pathMatchers(HttpMethod.GET, "/","/items", "/items/*", "/login", "/uploads/*")
+                                .permitAll()
+                        .anyExchange().authenticated()
                 )
                 .anonymous(Customizer.withDefaults())
                 .formLogin(form -> form

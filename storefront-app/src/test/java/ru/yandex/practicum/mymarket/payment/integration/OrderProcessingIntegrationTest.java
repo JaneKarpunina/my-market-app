@@ -2,21 +2,34 @@ package ru.yandex.practicum.mymarket.payment.integration;
 
 
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.client.WireMock;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.ResponseCookie;
 import org.springframework.mock.http.server.reactive.MockServerHttpResponse;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.ReactiveOAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.yandex.practicum.mymarket.ApiClient;
+import ru.yandex.practicum.mymarket.api.PaymentApi;
 import ru.yandex.practicum.mymarket.dto.CartDto;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
+import ru.yandex.practicum.mymarket.entity.Cart;
 import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.entity.Order;
 import ru.yandex.practicum.mymarket.entity.OrderItem;
@@ -27,14 +40,17 @@ import ru.yandex.practicum.mymarket.repository.OrderRepository;
 import ru.yandex.practicum.mymarket.service.CartService;
 import ru.yandex.practicum.mymarket.service.OrdersService;
 
+import java.time.Instant;
 import java.util.List;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 public class OrderProcessingIntegrationTest {
 
     private static WireMockServer wireMockServer;
@@ -42,128 +58,149 @@ public class OrderProcessingIntegrationTest {
     @Autowired
     private OrdersService orderService;
 
-    @Autowired
-    private ApiClient paymentApiClient;
-
     @MockBean
     private CartService cartService;
 
+    @Autowired
+    private PaymentApi paymentApi;
+
     @MockBean
-    private OrderRepository orderRepository;
+    private CartRepository cartRepository;
 
     @MockBean
     private CartItemRepository cartItemRepository;
 
     @MockBean
+    private OrderRepository orderRepository;
+
+    @MockBean
     private OrderItemRepository orderItemRepository;
 
     @MockBean
-    private CartRepository cartRepository;
-
-    private final String cartId = "cart-order-123";
+    private ReactiveOAuth2AuthorizedClientManager authorizedClientManager;
 
     @BeforeAll
     static void startWireMock() {
-        wireMockServer = new WireMockServer(0);
+        wireMockServer = new WireMockServer(wireMockConfig().dynamicPort());
         wireMockServer.start();
+        WireMock.configureFor("localhost", wireMockServer.port());
     }
 
     @AfterAll
     static void stopWireMock() {
-        if (wireMockServer != null) {
-            wireMockServer.stop();
-        }
+        wireMockServer.stop();
+    }
+
+    @DynamicPropertySource
+    static void registerProperties(DynamicPropertyRegistry registry) {
+        registry.add("app.payment-service.url", () -> wireMockServer.baseUrl());
     }
 
     @BeforeEach
-    void setUp() {
+    void setUpOAuth2() {
         wireMockServer.resetAll();
-        reset(cartService, orderRepository, cartItemRepository, orderItemRepository, cartRepository);
 
-        paymentApiClient.setBasePath("http://localhost:" + wireMockServer.port());
+        ClientRegistration clientRegistration = ClientRegistration.withRegistrationId("payment-service-client")
+                .clientId("test-client")
+                .tokenUri("http://localhost")
+                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                .build();
 
-        CartDto mockCartDto = new CartDto(
-                List.of(new ItemDto(1L, "Товар",
-                        "Описание", "img.png", 1000L, 1)),
-                1000L
-        );
-        CartItem mockCartItem = new CartItem(10L, cartId, 1L, 1, 1L);
-        Order mockSavedOrder = new Order();
-        mockSavedOrder.setId(555L); // Фейковый ID созданного заказа
+        OAuth2AccessToken accessToken = new OAuth2AccessToken(
+                OAuth2AccessToken.TokenType.BEARER, "fake-token",
+                Instant.now(), Instant.now().plusSeconds(3600));
 
-        doReturn(Mono.just(mockCartDto)).when(cartService).getCartDto(cartId);
-        doReturn(Mono.just(mockSavedOrder)).when(orderRepository).save(any(Order.class));
-        doReturn(Flux.just(mockCartItem)).when(cartItemRepository).findByCartId(cartId);
-        doReturn(Flux.just(new OrderItem())).when(orderItemRepository).saveAll(any(Iterable.class));
-        doReturn(Mono.empty()).when(cartRepository).deleteById(cartId);
+        OAuth2AuthorizedClient authorizedClient =
+                new OAuth2AuthorizedClient(clientRegistration, "anonymousUser", accessToken);
+
+        Mockito.when(authorizedClientManager.authorize(Mockito.any())).thenReturn(Mono.just(authorizedClient));
     }
 
     @Test
-    void processOrder_Success_ShouldPaySaveOrderAndDeleteCartWithCookie() {
+    @WithMockUser(username = "customer_user")
+    void processOrder_Success() {
+        Long userId = 1L;
+        Long cartId = 10L;
+        Long expectedOrderId = 999L;
 
-        wireMockServer.stubFor(post(urlEqualTo("/api/v1/payment"))
-                .withRequestBody(containing("\"amount\":1000"))
+        CartDto mockCartDto = new CartDto(List.of(), 3500L);
+        Mockito.when(cartService.getCartDto(userId)).thenReturn(Mono.just(mockCartDto));
+
+        Cart dbCart = new Cart();
+        dbCart.setId(cartId);
+        dbCart.setUserId(userId);
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(dbCart));
+
+        Order savedOrder = new Order();
+        savedOrder.setId(expectedOrderId);
+        savedOrder.setUserId(userId);
+        Mockito.when(orderRepository.save(Mockito.any(Order.class))).thenReturn(Mono.just(savedOrder));
+
+        CartItem cartItem = new CartItem();
+        cartItem.setCartId(cartId);
+        cartItem.setProductId(500L);
+        cartItem.setQuantity(2);
+        Mockito.when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.just(cartItem));
+
+        Mockito.when(orderItemRepository.saveAll(Mockito.anyCollection())).thenReturn(Flux.just(new OrderItem()));
+        Mockito.when(cartRepository.delete(Mockito.any(Cart.class))).thenReturn(Mono.empty());
+
+        stubFor(post(urlPathMatching(".*payment"))
+                .withHeader("X-User-Id", equalTo("customer_user"))
+                .withRequestBody(containing("\"amount\":3500"))
                 .willReturn(aResponse()
-                        .withHeader("Content-Type", "application/json")
                         .withStatus(200)
-                        .withBody("{\"status\": \"success\"}")));
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"status\":\"success\"}")));
 
-        MockServerHttpResponse response = new MockServerHttpResponse();
-
-        Mono<Long> result = orderService.processOrder(cartId, response);
+        Mono<Long> result = orderService.processOrder(userId);
 
         StepVerifier.create(result)
-                .expectNext(555L)
+                .expectNext(expectedOrderId)
                 .verifyComplete();
-
-        verify(orderRepository, times(1)).save(any(Order.class));
-        verify(cartRepository, times(1)).deleteById(cartId);
-
-        ResponseCookie cartCookie = response.getCookies().getFirst("cartId");
-        assertNotNull(cartCookie);
-        assertEquals("", cartCookie.getValue());
-        assertEquals(0, cartCookie.getMaxAge().getSeconds());
     }
 
     @Test
-    void processOrder_Failed_WhenClientError_ShouldThrowInsufficientFunds() {
+    @WithMockUser(username = "customer_user")
+    void processOrder_InsufficientFunds_ThrowsException() {
+        Long userId = 1L;
 
-        wireMockServer.stubFor(post(urlEqualTo("/api/v1/payment"))
+        CartDto mockCartDto = new CartDto(List.of(), 100000L);
+        Mockito.when(cartService.getCartDto(userId)).thenReturn(Mono.just(mockCartDto));
+
+        stubFor(post(urlPathMatching(".*payment"))
+                .withHeader("X-User-Id", equalTo("customer_user"))
                 .willReturn(aResponse()
                         .withStatus(400)
-                        .withBody("{\"error\": \"Not enough money\"}")));
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"error\":\"Недостаточно средств\"}")));
 
-        MockServerHttpResponse response = new MockServerHttpResponse();
-
-        Mono<Long> result = orderService.processOrder(cartId, response);
+        Mono<Long> result = orderService.processOrder(userId);
 
         StepVerifier.create(result)
-                .expectErrorMessage("Оплата не прошла: недостаточно средств")
+                .expectErrorMatches(throwable -> throwable instanceof RuntimeException
+                        && throwable.getMessage().equals("Оплата не прошла: недостаточно средств"))
                 .verify();
-
-        verify(orderRepository, never()).save(any(Order.class));
-        verify(cartRepository, never()).deleteById(anyString());
-
-        assertNull(response.getCookies().getFirst("cartId"));
     }
 
     @Test
-    void processOrder_Failed_WhenServerError_ShouldThrowServiceUnavailable() {
+    @WithMockUser(username = "customer_user")
+    void processOrder_ServiceUnavailable_ThrowsException() {
+        Long userId = 1L;
 
-        wireMockServer.stubFor(post(urlEqualTo("/api/v1/payment"))
+        CartDto mockCartDto = new CartDto(List.of(), 500L);
+        Mockito.when(cartService.getCartDto(userId)).thenReturn(Mono.just(mockCartDto));
+
+        stubFor(post(urlPathMatching(".*payment"))
+                .withHeader("X-User-Id", equalTo("customer_user"))
                 .willReturn(aResponse()
                         .withStatus(500)));
 
-        MockServerHttpResponse response = new MockServerHttpResponse();
-
-        Mono<Long> result = orderService.processOrder(cartId, response);
-
+        Mono<Long> result = orderService.processOrder(userId);
+        
         StepVerifier.create(result)
-                .expectErrorMessage("Сервис платежей временно недоступен")
+                .expectErrorMatches(throwable -> throwable instanceof RuntimeException
+                        && throwable.getMessage().equals("Сервис платежей временно недоступен"))
                 .verify();
-
-        verify(orderRepository, never()).save(any(Order.class));
-        verify(cartRepository, never()).deleteById(anyString());
     }
-
 }

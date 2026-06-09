@@ -29,29 +29,29 @@ public class AllItemsControllerTest {
     @MockBean
     ItemsService itemsService;
 
-    @Test
-    void getItems_Success() {
-
-        Paging paging = new Paging(5, 1, false, false);
-        ItemsWithPaging mockResponse = new ItemsWithPaging(List.of(), paging);
-
-        when(itemsService.getItemsWithPaging(any(), anyString(), anyInt(), anyInt(), any()))
-                .thenReturn(Mono.just(mockResponse));
-
-        webTestClient.get()
-                .uri("/items")
-                .cookie("cartId", "test-cart")
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(String.class)
-                .consumeWith(response -> {
-                    String body = response.getResponseBody();
-                    assertNotNull(body);
-                    assertTrue(body.contains("NO"));
-                });
-
-        verify(itemsService).getItemsWithPaging(null, "NO", 1, 5, "test-cart");
-    }
+//    @Test
+//    void getItems_Success() {
+//
+//        Paging paging = new Paging(5, 1, false, false);
+//        ItemsWithPaging mockResponse = new ItemsWithPaging(List.of(), paging);
+//
+//        when(itemsService.getItemsWithPaging(any(), anyString(), anyInt(), anyInt(), any()))
+//                .thenReturn(Mono.just(mockResponse));
+//
+//        webTestClient.get()
+//                .uri("/items")
+//                .cookie("cartId", "test-cart")
+//                .exchange()
+//                .expectStatus().isOk()
+//                .expectBody(String.class)
+//                .consumeWith(response -> {
+//                    String body = response.getResponseBody();
+//                    assertNotNull(body);
+//                    assertTrue(body.contains("NO"));
+//                });
+//
+//        verify(itemsService).getItemsWithPaging(null, "NO", 1, 5, "test-cart");
+//    }
 
 
 

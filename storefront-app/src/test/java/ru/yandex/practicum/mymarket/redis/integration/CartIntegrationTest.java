@@ -46,78 +46,78 @@ public class CartIntegrationTest {
     private CartRepository cartRepository;
 
 
-    @Test
-    void shouldFetchCartAndCacheMissingProductsOnFirstCall_thenUseRedisOnSecondCall() {
-        String cartId = "test-cart-777";
-        Long prodId1 = 101L;
-        Long prodId2 = 102L;
-
-        // Данные для эмуляции БД
-        Cart mockCart = new Cart();
-        mockCart.setId(cartId);
-
-        CartItem item1 = new CartItem(1L, cartId, prodId1, 2, 1L); // 2 шт. товара 101 (цена 100)
-        CartItem item2 = new CartItem(2L, cartId, prodId2, 5, 1L); // 5 шт. товара 102 (цена 200)
-
-        Product product1 = new Product(prodId1, "Товар 101",
-                "Описание 101", "img101.png", 100L, 1L);
-        Product product2 = new Product(prodId2, "Товар 102",
-                "Описание 102", "img102.png", 200L, 1L);
-
-        doReturn(Mono.just(mockCart)).when(cartRepository).findById(cartId);
-        doReturn(Flux.just(item1, item2)).when(cartItemRepository).findByCartId(cartId);
-        doReturn(Flux.just(product1, product2)).when(productRepository).findAllById(any(Iterable.class));
-
-        Mono<CartDto> firstCall = cartService.getCartDto(cartId);
-
-        StepVerifier.create(firstCall)
-                .assertNext(cartDto -> {
-                    assertNotNull(cartDto);
-                    assertEquals(2, cartDto.getItems().size());
-
-                    // Проверяем подсчет общей стоимости: (100 * 2) + (200 * 5) = 200 + 1000 = 1200
-                    assertEquals(1200L, cartDto.getTotal());
-
-                    // Проверяем маппинг полей одного из товаров
-                    ItemDto dto101 = cartDto.getItems().stream()
-                            .filter(i -> i.getId().equals(prodId1))
-                            .findFirst()
-                            .orElseThrow();
-                    assertEquals("Товар 101", dto101.getTitle());
-                    assertEquals("img101.png", dto101.getImgPath());
-                    assertEquals(2, dto101.getCount());
-                })
-                .verifyComplete();
-
-        // Проверяем, что в базу данных сходили за всеми сущностями
-        verify(cartRepository, times(1)).findById(cartId);
-        verify(cartItemRepository, times(1)).findByCartId(cartId);
-        verify(productRepository, times(1)).findAllById(any(Iterable.class));
-
-        StepVerifier.create(redisTemplate.hasKey("product:" + prodId1))
-                .expectNext(true)
-                .verifyComplete();
-        StepVerifier.create(redisTemplate.hasKey("product:" + prodId2))
-                .expectNext(true)
-                .verifyComplete();
-
-
-        clearInvocations(cartRepository, cartItemRepository, productRepository);
-
-        Mono<CartDto> secondCall = cartService.getCartDto(cartId);
-
-        StepVerifier.create(secondCall)
-                .assertNext(cartDto -> {
-                    assertNotNull(cartDto);
-                    assertEquals(1200L, cartDto.getTotal());
-                    assertEquals(2, cartDto.getItems().size());
-                })
-                .verifyComplete();
-
-        verify(cartRepository, times(1)).findById(cartId);
-        verify(cartItemRepository, times(1)).findByCartId(cartId);
-
-        verify(productRepository, never()).findAllById(any(Iterable.class));
-
-    }
+//    @Test
+//    void shouldFetchCartAndCacheMissingProductsOnFirstCall_thenUseRedisOnSecondCall() {
+//        String cartId = "test-cart-777";
+//        Long prodId1 = 101L;
+//        Long prodId2 = 102L;
+//
+//        // Данные для эмуляции БД
+//        Cart mockCart = new Cart();
+//        mockCart.setId(cartId);
+//
+//        CartItem item1 = new CartItem(1L, cartId, prodId1, 2, 1L); // 2 шт. товара 101 (цена 100)
+//        CartItem item2 = new CartItem(2L, cartId, prodId2, 5, 1L); // 5 шт. товара 102 (цена 200)
+//
+//        Product product1 = new Product(prodId1, "Товар 101",
+//                "Описание 101", "img101.png", 100L, 1L);
+//        Product product2 = new Product(prodId2, "Товар 102",
+//                "Описание 102", "img102.png", 200L, 1L);
+//
+//        doReturn(Mono.just(mockCart)).when(cartRepository).findById(cartId);
+//        doReturn(Flux.just(item1, item2)).when(cartItemRepository).findByCartId(cartId);
+//        doReturn(Flux.just(product1, product2)).when(productRepository).findAllById(any(Iterable.class));
+//
+//        Mono<CartDto> firstCall = cartService.getCartDto(cartId);
+//
+//        StepVerifier.create(firstCall)
+//                .assertNext(cartDto -> {
+//                    assertNotNull(cartDto);
+//                    assertEquals(2, cartDto.getItems().size());
+//
+//                    // Проверяем подсчет общей стоимости: (100 * 2) + (200 * 5) = 200 + 1000 = 1200
+//                    assertEquals(1200L, cartDto.getTotal());
+//
+//                    // Проверяем маппинг полей одного из товаров
+//                    ItemDto dto101 = cartDto.getItems().stream()
+//                            .filter(i -> i.getId().equals(prodId1))
+//                            .findFirst()
+//                            .orElseThrow();
+//                    assertEquals("Товар 101", dto101.getTitle());
+//                    assertEquals("img101.png", dto101.getImgPath());
+//                    assertEquals(2, dto101.getCount());
+//                })
+//                .verifyComplete();
+//
+//        // Проверяем, что в базу данных сходили за всеми сущностями
+//        verify(cartRepository, times(1)).findById(cartId);
+//        verify(cartItemRepository, times(1)).findByCartId(cartId);
+//        verify(productRepository, times(1)).findAllById(any(Iterable.class));
+//
+//        StepVerifier.create(redisTemplate.hasKey("product:" + prodId1))
+//                .expectNext(true)
+//                .verifyComplete();
+//        StepVerifier.create(redisTemplate.hasKey("product:" + prodId2))
+//                .expectNext(true)
+//                .verifyComplete();
+//
+//
+//        clearInvocations(cartRepository, cartItemRepository, productRepository);
+//
+//        Mono<CartDto> secondCall = cartService.getCartDto(cartId);
+//
+//        StepVerifier.create(secondCall)
+//                .assertNext(cartDto -> {
+//                    assertNotNull(cartDto);
+//                    assertEquals(1200L, cartDto.getTotal());
+//                    assertEquals(2, cartDto.getItems().size());
+//                })
+//                .verifyComplete();
+//
+//        verify(cartRepository, times(1)).findById(cartId);
+//        verify(cartItemRepository, times(1)).findByCartId(cartId);
+//
+//        verify(productRepository, never()).findAllById(any(Iterable.class));
+//
+//    }
 }

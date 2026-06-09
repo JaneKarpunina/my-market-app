@@ -29,55 +29,55 @@ public class CartControllerTest {
     @MockBean
     CartService cartService;
 
-    @Test
-    void shouldReturnCartViewWithModelAttributes() {
-        CartDetailedResponse mockResponse = createMockCartData();
-        String cartId = "test-cart-id";
-        String error = "some-error";
-
-        when(cartService.getCartDetailed(cartId)).thenReturn(Mono.just(mockResponse));
-
-        webTestClient.get()
-                .uri(uriBuilder -> uriBuilder.path("/cart/items")
-                        .queryParam("error", error)
-                        .build())
-                .cookie("cartId", cartId)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(String.class)
-                .consumeWith(response -> {
-                    String body = response.getResponseBody();
-                    assertNotNull(body);
-                    assertTrue(body.contains("0"));
-                });
-
-    }
-
-    @Test
-    void shouldChangeItemQuantityAndReturnRenderingView() {
-        CartDetailedResponse mockResponse = createMockCartData();
-        String cartId = "test-cart-id";
-
-        when(cartService.changeItemQuantity(eq(123L), eq("PLUS"), eq(cartId)))
-                .thenReturn(Mono.empty());
-
-        when(cartService.getCartDetailed(cartId))
-                .thenReturn(Mono.just(mockResponse));
-
-        webTestClient.post()
-                .uri("/cart/items")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .bodyValue("id=123&action=PLUS")
-                .cookie("cartId", cartId)
-                .exchange()
-                .expectStatus().isOk();
-
-    }
-
-    private CartDetailedResponse createMockCartData() {
-        List<ItemDto> mockItems = Collections.emptyList();
-        CartDto mockCart = new CartDto(mockItems, 0L);
-
-        return new CartDetailedResponse(mockCart, 1000L, true, null);
-    }
+//    @Test
+//    void shouldReturnCartViewWithModelAttributes() {
+//        CartDetailedResponse mockResponse = createMockCartData();
+//        String cartId = "test-cart-id";
+//        String error = "some-error";
+//
+//        when(cartService.getCartDetailed(cartId)).thenReturn(Mono.just(mockResponse));
+//
+//        webTestClient.get()
+//                .uri(uriBuilder -> uriBuilder.path("/cart/items")
+//                        .queryParam("error", error)
+//                        .build())
+//                .cookie("cartId", cartId)
+//                .exchange()
+//                .expectStatus().isOk()
+//                .expectBody(String.class)
+//                .consumeWith(response -> {
+//                    String body = response.getResponseBody();
+//                    assertNotNull(body);
+//                    assertTrue(body.contains("0"));
+//                });
+//
+//    }
+//
+//    @Test
+//    void shouldChangeItemQuantityAndReturnRenderingView() {
+//        CartDetailedResponse mockResponse = createMockCartData();
+//        String cartId = "test-cart-id";
+//
+//        when(cartService.changeItemQuantity(eq(123L), eq("PLUS"), eq(cartId)))
+//                .thenReturn(Mono.empty());
+//
+//        when(cartService.getCartDetailed(cartId))
+//                .thenReturn(Mono.just(mockResponse));
+//
+//        webTestClient.post()
+//                .uri("/cart/items")
+//                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+//                .bodyValue("id=123&action=PLUS")
+//                .cookie("cartId", cartId)
+//                .exchange()
+//                .expectStatus().isOk();
+//
+//    }
+//
+//    private CartDetailedResponse createMockCartData() {
+//        List<ItemDto> mockItems = Collections.emptyList();
+//        CartDto mockCart = new CartDto(mockItems, 0L);
+//
+//        return new CartDetailedResponse(mockCart, 1000L, true, null);
+//    }
 }

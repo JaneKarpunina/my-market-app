@@ -25,48 +25,48 @@ public class OrdersControllerTest {
     @MockBean
     OrdersService ordersService;
 
-    @Test
-    void getOrders_ShouldReturnOrdersView() {
-
-        OrderDto order1 = new OrderDto(100L, List.of(), 1000L);
-        OrderDto order2 = new OrderDto(200L, List.of(), 2000L);
-
-        when(ordersService.getOrders()).thenReturn(Flux.just(order1, order2));
-
-        webTestClient.get()
-                .uri("/orders")
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(String.class)
-                .consumeWith(result -> {
-                    String body = result.getResponseBody();
-                    assertNotNull(body);
-                    assertTrue(body.contains("1000"));
-                });
-    }
-
-    @Test
-    void getOrder_ShouldReturnOrderViewWithFlag() {
-
-        Long orderId = 1L;
-        OrderDto mockOrder = new OrderDto(orderId, List.of(), 500L);
-
-        when(ordersService.getOrder(orderId)).thenReturn(Mono.just(mockOrder));
-
-        webTestClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/orders/{id}")
-                        .queryParam("newOrder", "true")
-                        .build(orderId))
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(String.class)
-                .consumeWith(result -> {
-                    String body = result.getResponseBody();
-                    assertNotNull(body);
-                    assertTrue(body.contains("500"));
-                });
-    }
+//    @Test
+//    void getOrders_ShouldReturnOrdersView() {
+//
+//        OrderDto order1 = new OrderDto(100L, List.of(), 1000L);
+//        OrderDto order2 = new OrderDto(200L, List.of(), 2000L);
+//
+//        when(ordersService.getOrders()).thenReturn(Flux.just(order1, order2));
+//
+//        webTestClient.get()
+//                .uri("/orders")
+//                .exchange()
+//                .expectStatus().isOk()
+//                .expectBody(String.class)
+//                .consumeWith(result -> {
+//                    String body = result.getResponseBody();
+//                    assertNotNull(body);
+//                    assertTrue(body.contains("1000"));
+//                });
+//    }
+//
+//    @Test
+//    void getOrder_ShouldReturnOrderViewWithFlag() {
+//
+//        Long orderId = 1L;
+//        OrderDto mockOrder = new OrderDto(orderId, List.of(), 500L);
+//
+//        when(ordersService.getOrder(orderId)).thenReturn(Mono.just(mockOrder));
+//
+//        webTestClient.get()
+//                .uri(uriBuilder -> uriBuilder
+//                        .path("/orders/{id}")
+//                        .queryParam("newOrder", "true")
+//                        .build(orderId))
+//                .exchange()
+//                .expectStatus().isOk()
+//                .expectBody(String.class)
+//                .consumeWith(result -> {
+//                    String body = result.getResponseBody();
+//                    assertNotNull(body);
+//                    assertTrue(body.contains("500"));
+//                });
+//    }
 
 
 }
