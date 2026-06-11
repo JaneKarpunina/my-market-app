@@ -197,7 +197,7 @@ public class OrderProcessingIntegrationTest {
                         .withStatus(500)));
 
         Mono<Long> result = orderService.processOrder(userId);
-        
+
         StepVerifier.create(result)
                 .expectErrorMatches(throwable -> throwable instanceof RuntimeException
                         && throwable.getMessage().equals("Сервис платежей временно недоступен"))

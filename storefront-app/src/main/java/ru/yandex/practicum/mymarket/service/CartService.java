@@ -49,7 +49,7 @@ public class CartService {
     }
 
     @Transactional
-    public Mono<CartDto> getCartDto(Long userId) { // Изменено на Long userId
+    public Mono<CartDto> getCartDto(Long userId) {
         if (userId == null) {
             return Mono.just(new CartDto(List.of(), 0L));
         }

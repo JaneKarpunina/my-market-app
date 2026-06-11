@@ -1,17 +1,20 @@
 package ru.yandex.practicum.mymarket.redis.integration;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.security.oauth2.client.ReactiveOAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizedClientRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.yandex.practicum.mymarket.dto.CartDto;
-import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.entity.Cart;
 import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.entity.Product;
@@ -20,104 +23,122 @@ import ru.yandex.practicum.mymarket.repository.CartRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 import ru.yandex.practicum.mymarket.service.CartService;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.reset;
 
 @SpringBootTest
 @Import(EmbeddedRedisConfiguration.class)
 public class CartIntegrationTest {
 
     @Autowired
-    CartService cartService;
+    private CartService cartService;
 
     @Autowired
     private ReactiveRedisTemplate<String, Object> redisTemplate;
 
     @MockBean
-    private ProductRepository productRepository;
+    private CartRepository cartRepository;
 
     @MockBean
     private CartItemRepository cartItemRepository;
 
+    @MockBean
+    private ProductRepository productRepository;
 
     @MockBean
-    private CartRepository cartRepository;
+    private ReactiveOAuth2AuthorizedClientManager authorizedClientManager;
+    @MockBean
+    private ReactiveClientRegistrationRepository clientRegistrationRepository;
+    @MockBean
+    private ServerOAuth2AuthorizedClientRepository authorizedClientRepository;
 
+    @BeforeEach
+    void cleanUpRedis() {
+        redisTemplate.execute(connection -> connection.serverCommands().flushDb()).blockLast();
+        reset(productRepository, cartItemRepository, cartRepository);
+    }
 
-//    @Test
-//    void shouldFetchCartAndCacheMissingProductsOnFirstCall_thenUseRedisOnSecondCall() {
-//        String cartId = "test-cart-777";
-//        Long prodId1 = 101L;
-//        Long prodId2 = 102L;
-//
-//        // Данные для эмуляции БД
-//        Cart mockCart = new Cart();
-//        mockCart.setId(cartId);
-//
-//        CartItem item1 = new CartItem(1L, cartId, prodId1, 2, 1L); // 2 шт. товара 101 (цена 100)
-//        CartItem item2 = new CartItem(2L, cartId, prodId2, 5, 1L); // 5 шт. товара 102 (цена 200)
-//
-//        Product product1 = new Product(prodId1, "Товар 101",
-//                "Описание 101", "img101.png", 100L, 1L);
-//        Product product2 = new Product(prodId2, "Товар 102",
-//                "Описание 102", "img102.png", 200L, 1L);
-//
-//        doReturn(Mono.just(mockCart)).when(cartRepository).findById(cartId);
-//        doReturn(Flux.just(item1, item2)).when(cartItemRepository).findByCartId(cartId);
-//        doReturn(Flux.just(product1, product2)).when(productRepository).findAllById(any(Iterable.class));
-//
-//        Mono<CartDto> firstCall = cartService.getCartDto(cartId);
-//
-//        StepVerifier.create(firstCall)
-//                .assertNext(cartDto -> {
-//                    assertNotNull(cartDto);
-//                    assertEquals(2, cartDto.getItems().size());
-//
-//                    // Проверяем подсчет общей стоимости: (100 * 2) + (200 * 5) = 200 + 1000 = 1200
-//                    assertEquals(1200L, cartDto.getTotal());
-//
-//                    // Проверяем маппинг полей одного из товаров
-//                    ItemDto dto101 = cartDto.getItems().stream()
-//                            .filter(i -> i.getId().equals(prodId1))
-//                            .findFirst()
-//                            .orElseThrow();
-//                    assertEquals("Товар 101", dto101.getTitle());
-//                    assertEquals("img101.png", dto101.getImgPath());
-//                    assertEquals(2, dto101.getCount());
-//                })
-//                .verifyComplete();
-//
-//        // Проверяем, что в базу данных сходили за всеми сущностями
-//        verify(cartRepository, times(1)).findById(cartId);
-//        verify(cartItemRepository, times(1)).findByCartId(cartId);
-//        verify(productRepository, times(1)).findAllById(any(Iterable.class));
-//
-//        StepVerifier.create(redisTemplate.hasKey("product:" + prodId1))
-//                .expectNext(true)
-//                .verifyComplete();
-//        StepVerifier.create(redisTemplate.hasKey("product:" + prodId2))
-//                .expectNext(true)
-//                .verifyComplete();
-//
-//
-//        clearInvocations(cartRepository, cartItemRepository, productRepository);
-//
-//        Mono<CartDto> secondCall = cartService.getCartDto(cartId);
-//
-//        StepVerifier.create(secondCall)
-//                .assertNext(cartDto -> {
-//                    assertNotNull(cartDto);
-//                    assertEquals(1200L, cartDto.getTotal());
-//                    assertEquals(2, cartDto.getItems().size());
-//                })
-//                .verifyComplete();
-//
-//        verify(cartRepository, times(1)).findById(cartId);
-//        verify(cartItemRepository, times(1)).findByCartId(cartId);
-//
-//        verify(productRepository, never()).findAllById(any(Iterable.class));
-//
-//    }
+    private void givenCartAndItemsExistInDb(Long userId, Long cartId, Long productId, int quantity) {
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+        mockCart.setUserId(userId);
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
+
+        CartItem mockItem = new CartItem();
+        mockItem.setCartId(cartId);
+        mockItem.setProductId(productId);
+        mockItem.setQuantity(quantity);
+        Mockito.when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.just(mockItem));
+    }
+
+    @Test
+    void getCartDto_ShouldReturnProductsFromRedisCache_WhenCacheExists() {
+        Long userId = 1L;
+        Long cartId = 100L;
+        Long productId = 500L;
+        int quantity = 2;
+
+        givenCartAndItemsExistInDb(userId, cartId, productId, quantity);
+
+        Product cachedProduct = new Product();
+        cachedProduct.setId(productId);
+        cachedProduct.setTitle("Кэшированный телефон");
+        cachedProduct.setPrice(1000L);
+        redisTemplate.opsForValue().set("product:" + productId, cachedProduct).block();
+
+        Mono<CartDto> result = cartService.getCartDto(userId);
+
+        StepVerifier.create(result)
+                .assertNext(cartDto -> {
+                    // Используем стандартные JUnit 5 Assertions вместо AssertJ
+                    assertEquals(2000L, cartDto.getTotal()); // 1000 * 2
+                    assertEquals(1, cartDto.getItems().size());
+                    assertEquals("Кэшированный телефон", cartDto.getItems().getFirst().getTitle());
+                })
+                .verifyComplete();
+
+        Mockito.verify(productRepository, Mockito.never()).findAllById(Mockito.anyCollection());
+    }
+
+    @Test
+    void getCartDto_ShouldFetchFromDbAndPopulateRedis_WhenCacheIsEmpty() {
+        Long userId = 1L;
+        Long cartId = 100L;
+        Long productId = 700L;
+        int quantity = 3;
+
+        givenCartAndItemsExistInDb(userId, cartId, productId, quantity);
+
+        Product dbProduct = new Product();
+        dbProduct.setId(productId);
+        dbProduct.setTitle("Ноутбук из БД");
+        dbProduct.setPrice(5000L);
+        Mockito.when(productRepository.findAllById(List.of(productId))).thenReturn(Flux.just(dbProduct));
+
+        Mono<CartDto> result = cartService.getCartDto(userId);
+
+        StepVerifier.create(result)
+                .assertNext(cartDto -> {
+                    assertEquals(15000L, cartDto.getTotal()); // 5000 * 3
+                    assertEquals("Ноутбук из БД", cartDto.getItems().get(0).getTitle());
+                })
+                .verifyComplete();
+
+        Mockito.verify(productRepository, Mockito.times(1)).findAllById(List.of(productId));
+
+        Mono<Object> redisContentMono = redisTemplate.opsForValue().get("product:" + productId);
+
+        StepVerifier.create(redisContentMono)
+                .assertNext(obj -> {
+                    assertNotNull(obj);
+                    Product productInCache = (Product) obj;
+                    assertEquals("Ноутбук из БД", productInCache.getTitle());
+                    assertEquals(5000L, productInCache.getPrice());
+                })
+                .verifyComplete();
+    }
+
 }

@@ -2,15 +2,13 @@ package ru.yandex.practicum.mymarket.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.data.redis.core.ReactiveValueOperations;
-import org.springframework.http.ResponseCookie;
-import org.springframework.http.server.reactive.ServerHttpResponse;
-import org.springframework.util.LinkedMultiValueMap;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -18,7 +16,6 @@ import ru.yandex.practicum.mymarket.api.PaymentApi;
 import ru.yandex.practicum.mymarket.domain.BalanceResponse;
 import ru.yandex.practicum.mymarket.dto.CartDetailedResponse;
 import ru.yandex.practicum.mymarket.dto.CartDto;
-import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.entity.Cart;
 import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.entity.Product;
@@ -27,8 +24,10 @@ import ru.yandex.practicum.mymarket.repository.ProductRepository;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.reset;
 
 @SpringBootTest(classes = CartService.class)
 public class CartServiceTest extends BaseTest {
@@ -49,14 +48,7 @@ public class CartServiceTest extends BaseTest {
     @MockBean
     private ReactiveValueOperations<String, Object> valueOperations;
 
-    @MockBean
-    private ServerHttpResponse response;
 
-    private final Long productId = 1L;
-    private final String cartId = "test-cart-123";
-    private final String PLUS = "PLUS";
-    private final String MINUS = "MINUS";
-    private final String DELETE = "DELETE";
 
     @BeforeEach
     void resetMocks() {
@@ -66,353 +58,451 @@ public class CartServiceTest extends BaseTest {
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
-//    @Test
-//    void getCartDto_ShouldReturnEmptyCart_WhenCartIdIsNullOrEmpty() {
-//
-//        Mono<CartDto> resultNull = cartService.getCartDto(null);
-//        Mono<CartDto> resultEmpty = cartService.getCartDto("");
-//
-//        StepVerifier.create(resultNull)
-//                .assertNext(cartDto -> {
-//                    assertTrue(cartDto.getItems().isEmpty());
-//                    assertEquals(0L, cartDto.getTotal());
-//                })
-//                .verifyComplete();
-//
-//        StepVerifier.create(resultEmpty)
-//                .assertNext(cartDto -> assertTrue(cartDto.getItems().isEmpty()))
-//                .verifyComplete();
-//
-//        verifyNoInteractions(cartRepository, cartItemRepository, productRepository, redisTemplate);
-//    }
-//
-//    @Test
-//    void getCartDto_ShouldReturnEmptyCart_WhenCartHasNoItems() {
-//        Cart existingCart = new Cart();
-//        existingCart.setId(cartId);
-//
-//        when(cartRepository.findById(cartId)).thenReturn(Mono.just(existingCart));
-//        when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.empty()); // Корзина пустая
-//
-//        Mono<CartDto> result = cartService.getCartDto(cartId);
-//
-//        StepVerifier.create(result)
-//                .assertNext(cartDto -> {
-//                    assertTrue(cartDto.getItems().isEmpty());
-//                    assertEquals(0L, cartDto.getTotal());
-//                })
-//                .verifyComplete();
-//
-//        verify(cartRepository, times(1)).findById(cartId);
-//        verify(cartItemRepository, times(1)).findByCartId(cartId);
-//        verifyNoInteractions(productRepository, valueOperations);
-//    }
-//
-//    @Test
-//    void getCartDto_Success_AllProductsFoundInCache() {
-//        Cart existingCart = new Cart();
-//        existingCart.setId(cartId);
-//
-//        CartItem item1 = new CartItem(1L, cartId, 101L, 2, 1L);
-//
-//        Product product1 = new Product(101L, "Товар 101", "Описание 101",
-//                "img101.png", 150L, 1L);
-//
-//        when(cartRepository.findById(cartId)).thenReturn(Mono.just(existingCart));
-//        when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.just(item1));
-//
-//        List<String> expectedCacheKeys = List.of("product:101");
-//        when(valueOperations.multiGet(expectedCacheKeys)).thenReturn(Mono.just(List.of(product1)));
-//
-//        Mono<CartDto> result = cartService.getCartDto(cartId);
-//
-//        StepVerifier.create(result)
-//                .assertNext(cartDto -> {
-//                    assertNotNull(cartDto);
-//                    assertEquals(1, cartDto.getItems().size());
-//                    // 150 * 2 = 300
-//                    assertEquals(300L, cartDto.getTotal());
-//                    ItemDto itemDto = cartDto.getItems().get(0);
-//                    assertEquals("Товар 101", itemDto.getTitle());
-//                    assertEquals(2, itemDto.getCount());
-//                })
-//                .verifyComplete();
-//
-//        verify(productRepository, never()).findAllById(any(Iterable.class));
-//        verify(valueOperations, never()).multiSet(anyMap());
-//    }
-//
-//    @Test
-//    void getCartDto_Success_CacheMiss_ShouldFetchFromDbAndSaveToRedis() {
-//        Cart existingCart = new Cart();
-//        existingCart.setId(cartId);
-//
-//        CartItem item1 = new CartItem(1L, cartId, 101L, 3, 1L);
-//
-//        Product product1 = new Product(101L, "Товар 101", "Описание 101",
-//                "img101.png", 200L, 1L);
-//
-//        when(cartRepository.findById(cartId)).thenReturn(Mono.just(existingCart));
-//        when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.just(item1));
-//
-//        List<Object> redisResult = new ArrayList<>();
-//        redisResult.add(null);
-//        when(valueOperations.multiGet(List.of("product:101"))).thenReturn(Mono.just(redisResult));
-//
-//        when(productRepository.findAllById(List.of(101L))).thenReturn(Flux.just(product1));
-//
-//        when(valueOperations.multiSet(anyMap())).thenReturn(Mono.just(true));
-//        when(redisTemplate.expire(eq("product:101"), any())).thenReturn(Mono.just(true));
-//
-//        Mono<CartDto> result = cartService.getCartDto(cartId);
-//        StepVerifier.create(result)
-//                .assertNext(cartDto -> {
-//                    assertNotNull(cartDto);
-//                    assertEquals(1, cartDto.getItems().size());
-//                    // 200 * 3 = 600
-//                    assertEquals(600L, cartDto.getTotal());
-//                })
-//                .verifyComplete();
-//
-//        // Верифицируем, что сработал Cache Miss сценарий
-//        verify(productRepository, times(1)).findAllById(List.of(101L));
-//        verify(valueOperations, times(1)).multiSet(anyMap());
-//        verify(redisTemplate, times(1)).expire(eq("product:101"), any());
-//
-//    }
-//
-//    @Test
-//    void getCartDto_ShouldCreateNewCart_WhenCartNotFoundInDb() {
-//
-//        when(cartRepository.findById(cartId)).thenReturn(Mono.empty());
-//
-//        Cart savedCart = new Cart();
-//        savedCart.setId(cartId);
-//        when(cartRepository.save(any(Cart.class))).thenReturn(Mono.just(savedCart));
-//
-//        when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.empty());
-//
-//        Mono<CartDto> result = cartService.getCartDto(cartId);
-//
-//        StepVerifier.create(result)
-//                .assertNext(cartDto -> {
-//                    assertTrue(cartDto.getItems().isEmpty());
-//                    assertEquals(0L, cartDto.getTotal());
-//                })
-//                .verifyComplete();
-//
-//        verify(cartRepository, times(1)).save(any(Cart.class));
-//    }
-//
-//
-//    @Test
-//    void changeQuantity_DeleteOnMinusOne() {
-//        CartItem item = new CartItem(10L, cartId, productId, 1, 0L);
-//        when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.just(item));
-//        when(cartItemRepository.delete(item)).thenReturn(Mono.empty());
-//
-//        StepVerifier.create(cartService.changeItemQuantity(productId, MINUS, cartId))
-//                .verifyComplete();
-//
-//        verify(cartItemRepository).delete(item);
-//    }
-//
-//    @Test
-//    void changeQuantity_DeleteOnAction() {
-//        CartItem item = new CartItem(10L, cartId, productId, 5, 0L);
-//        when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.just(item));
-//        when(cartItemRepository.delete(item)).thenReturn(Mono.empty());
-//
-//        StepVerifier.create(cartService.changeItemQuantity(productId, DELETE, cartId))
-//                .verifyComplete();
-//
-//        verify(cartItemRepository).delete(item);
-//    }
-//
-//    @Test
-//    void changeQuantity_Decrement() {
-//        CartItem item = new CartItem(10L, cartId, productId, 5, 0L);
-//        when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.just(item));
-//        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(item));
-//
-//        StepVerifier.create(cartService.changeItemQuantity(productId, MINUS, cartId))
-//                .verifyComplete();
-//
-//        verify(cartItemRepository).save(argThat(it -> it.getQuantity() == 4));
-//    }
-//
-//    @Test
-//    void changeQuantity_Increment() {
-//        CartItem item = new CartItem(10L, cartId, productId, 2, 0L);
-//        when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.just(item));
-//        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(item));
-//
-//        StepVerifier.create(cartService.changeItemQuantity(productId, PLUS, cartId))
-//                .verifyComplete();
-//
-//        verify(cartItemRepository).save(argThat(it -> it.getQuantity() == 3));
-//    }
-//
-//    @Test
-//    void changeQuantity_NotFound() {
-//        when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.empty());
-//
-//        StepVerifier.create(cartService.changeItemQuantity(productId, PLUS, cartId))
-//                .verifyComplete();
-//
-//        verify(cartItemRepository, never()).save(any());
-//        verify(cartItemRepository, never()).delete(any());
-//    }
-//
-//    @Test
-//    void getCartDetailed_Success_WhenBalanceIsEnough() {
-//
-//        CartDto mockCart = new CartDto(List.of(), 1000L);
-//
-//        doReturn(Mono.just(mockCart)).when(cartService).getCartDto(cartId);
-//
-//        BalanceResponse mockBalance = new BalanceResponse();
-//        mockBalance.setAmount(1500L);
-//        when(paymentApi.getBalance()).thenReturn(Mono.just(mockBalance));
-//
-//        Mono<CartDetailedResponse> result = cartService.getCartDetailed(cartId);
-//
-//        StepVerifier.create(result)
-//                .assertNext(response -> {
-//                    assertNotNull(response);
-//                    assertEquals(1000L, response.getCart().getTotal());
-//                    assertEquals(1500L, response.getBalance());
-//                    assertTrue(response.isCanOrder());
-//                    assertNull(response.getErrorMessage());
-//                })
-//                .verifyComplete();
-//    }
-//
-//    @Test
-//    void getCartDetailed_Failed_WhenInsufficientFunds() {
-//        CartDto mockCart = new CartDto(List.of(), 1000L);
-//
-//        doReturn(Mono.just(mockCart)).when(cartService).getCartDto(cartId);
-//
-//        // Настраиваем маленький баланс (400 < 1000)
-//        BalanceResponse mockBalance = new BalanceResponse();
-//        mockBalance.setAmount(400L);
-//        when(paymentApi.getBalance()).thenReturn(Mono.just(mockBalance));
-//
-//        Mono<CartDetailedResponse> result = cartService.getCartDetailed(cartId);
-//
-//        StepVerifier.create(result)
-//                .assertNext(response -> {
-//                    assertNotNull(response);
-//                    assertEquals(400L, response.getBalance());
-//                    assertFalse(response.isCanOrder());
-//                    assertEquals("Недостаточно средств", response.getErrorMessage());
-//                })
-//                .verifyComplete();
-//    }
-//
-//    @Test
-//    void getCartDetailed_Failed_WhenPaymentServiceThrowsException() {
-//        CartDto mockCart = new CartDto(List.of(), 1000L);
-//
-//        doReturn(Mono.just(mockCart)).when(cartService).getCartDto(cartId);
-//
-//        // Имитируем сетевую ошибку WebClient (сервис платежей недоступен)
-//        when(paymentApi.getBalance()).thenReturn(Mono.error(new RuntimeException("Timeout")));
-//
-//        Mono<CartDetailedResponse> result = cartService.getCartDetailed(cartId);
-//
-//        // Проверяем, что .onErrorReturn(-1L) корректно перехватил ошибку
-//        StepVerifier.create(result)
-//                .assertNext(response -> {
-//                    assertNotNull(response);
-//                    assertEquals(-1L, response.getBalance()); // Ошибка превратилась в -1
-//                    assertFalse(response.isCanOrder());
-//                    assertEquals("Сервис платежей недоступен", response.getErrorMessage());
-//                })
-//                .verifyComplete();
-//    }
-//
-//    @Test
-//    void changeItemsCount_NewCartCreation() {
-//        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
-//        when(cartRepository.save(any(Cart.class))).thenReturn(Mono.just(new Cart()));
-//        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(new CartItem()));
-//
-//        when(response.getCookies()).thenReturn(new LinkedMultiValueMap<>());
-//
-//        StepVerifier.create(cartService.changeItemsCount(productId, "PLUS", response, null))
-//                .verifyComplete();
-//
-//        verify(cartRepository).save(any(Cart.class));
-//        verify(cartItemRepository).save(any(CartItem.class));
-//        verify(response).addCookie(any(ResponseCookie.class));
-//    }
-//
-//    @Test
-//    void changeItemsCount_IncrementExistingItem() {
-//        CartItem existingItem = new CartItem(10L, cartId, productId, 1, 0L);
-//
-//        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
-//        when(cartRepository.findById(cartId)).thenReturn(Mono.just(new Cart()));
-//        when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.just(existingItem));
-//        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(existingItem));
-//
-//        StepVerifier.create(cartService.changeItemsCount(productId, "PLUS", response, cartId))
-//                .verifyComplete();
-//
-//        verify(cartItemRepository).save(argThat(item -> item.getQuantity() == 2));
-//    }
-//
-//    @Test
-//    void changeItemsCount_CartNotFoundInDb_CreateNew() {
-//        String existingCartId = "expired-cart-id";
-//
-//        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
-//        when(cartRepository.findById(existingCartId)).thenReturn(Mono.empty());
-//
-//        when(cartRepository.save(any(Cart.class))).thenReturn(Mono.just(new Cart()));
-//        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(new CartItem()));
-//
-//        StepVerifier.create(cartService.changeItemsCount(productId, "PLUS", response, existingCartId))
-//                .verifyComplete();
-//
-//        verify(cartRepository).save(argThat(cart -> cart.getId().equals(existingCartId)));
-//        verify(cartItemRepository).save(argThat(item -> item.getProductId().equals(productId)));
-//
-//
-//        verify(response, times(0)).addCookie(any());
-//    }
-//
-//    @Test
-//    void changeItemsCount_RemoveItemOnMinus() {
-//
-//        CartItem existingItem = new CartItem(10L, cartId, productId, 1, 0L);
-//
-//        when(productRepository.findById(productId)).thenReturn(Mono.just(new Product()));
-//        when(cartRepository.findById(cartId)).thenReturn(Mono.just(new Cart()));
-//        when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.just(existingItem));
-//        when(cartItemRepository.delete(existingItem)).thenReturn(Mono.empty());
-//
-//        StepVerifier.create(cartService.changeItemsCount(productId, "MINUS", response, cartId))
-//                .verifyComplete();
-//
-//        verify(cartItemRepository).delete(existingItem);
-//    }
-//
-//    @Test
-//    void changeItemsCount_ProductNotFound() {
-//
-//        when(productRepository.findById(productId)).thenReturn(Mono.empty());
-//
-//        StepVerifier.create(cartService.changeItemsCount(productId, "PLUS", response, cartId))
-//                .verifyComplete();
-//
-//        verifyNoInteractions(cartRepository);
-//        verifyNoInteractions(cartItemRepository);
-//    }
+    @Test
+    void getCartDto_ShouldReturnEmptyCart_WhenUserIdIsNull() {
+        Mono<CartDto> result = cartService.getCartDto(null);
+
+        StepVerifier.create(result)
+                .assertNext(cartDto -> {
+                    assertNotNull(cartDto);
+                    assertEquals(0L, cartDto.getTotal());
+                    assertEquals(0, cartDto.getItems().size());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void getCartDto_ShouldReturnEmptyCart_WhenCartHasNoItems() {
+        Long userId = 1L;
+        Long cartId = 100L;
+
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+        mockCart.setUserId(userId);
+
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
+        Mockito.when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.empty());
+
+        Mono<CartDto> result = cartService.getCartDto(userId);
+
+        StepVerifier.create(result)
+                .assertNext(cartDto -> {
+                    assertEquals(0L, cartDto.getTotal());
+                    assertEquals(0, cartDto.getItems().size());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void getCartDto_ShouldReturnProductsFromRedisCache_WhenCacheExists() {
+        Long userId = 1L;
+        Long cartId = 100L;
+        Long productId = 500L;
+
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+        mockCart.setUserId(userId);
+
+        CartItem mockItem = new CartItem();
+        mockItem.setCartId(cartId);
+        mockItem.setProductId(productId);
+        mockItem.setQuantity(3);
+
+        Product cachedProduct = new Product();
+        cachedProduct.setId(productId);
+        cachedProduct.setTitle("Телефон из кэша");
+        cachedProduct.setPrice(2000L);
+
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
+        Mockito.when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.just(mockItem));
+
+        List<String> expectedCacheKeys = List.of("product:" + productId);
+        Mockito.when(valueOperations.multiGet(expectedCacheKeys))
+                .thenReturn(Mono.just(List.of(cachedProduct))); // Нашли продукт в Redis!
+
+        Mono<CartDto> result = cartService.getCartDto(userId);
+
+        StepVerifier.create(result)
+                .assertNext(cartDto -> {
+                    assertEquals(6000L, cartDto.getTotal()); // 2000 * 3
+                    assertEquals(1, cartDto.getItems().size());
+                    assertEquals("Телефон из кэша", cartDto.getItems().getFirst().getTitle());
+                })
+                .verifyComplete();
+
+        Mockito.verify(productRepository, Mockito.never()).findAllById(Mockito.anyCollection());
+    }
+
+    @Test
+    void getCartDto_ShouldFetchFromDbAndCache_WhenRedisCacheIsEmpty() {
+        Long userId = 1L;
+        Long cartId = 100L;
+        Long productId = 700L;
+
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+        mockCart.setUserId(userId);
+
+        CartItem mockItem = new CartItem();
+        mockItem.setCartId(cartId);
+        mockItem.setProductId(productId);
+        mockItem.setQuantity(2);
+
+        Product dbProduct = new Product();
+        dbProduct.setId(productId);
+        dbProduct.setTitle("Телевизор из БД");
+        dbProduct.setPrice(15000L);
+
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
+        Mockito.when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.just(mockItem));
+
+        List<String> expectedCacheKeys = List.of("product:" + productId);
+        List<Object> emptyRedisResult = new ArrayList<>();
+        emptyRedisResult.add(null);
+        Mockito.when(valueOperations.multiGet(expectedCacheKeys)).thenReturn(Mono.just(emptyRedisResult));
+
+        Mockito.when(productRepository.findAllById(List.of(productId))).thenReturn(Flux.just(dbProduct));
+
+        Mockito.when(valueOperations.multiSet(Mockito.anyMap())).thenReturn(Mono.just(true));
+        Mockito.when(redisTemplate.expire(Mockito.anyString(), Mockito.any())).thenReturn(Mono.just(true));
+
+        Mono<CartDto> result = cartService.getCartDto(userId);
+
+        StepVerifier.create(result)
+                .assertNext(cartDto -> {
+                    assertEquals(30000L, cartDto.getTotal());
+                    assertEquals(1, cartDto.getItems().size());
+                    assertEquals("Телевизор из БД", cartDto.getItems().getFirst().getTitle());
+                })
+                .verifyComplete();
+
+        Mockito.verify(productRepository, Mockito.times(1)).findAllById(List.of(productId));
+        Mockito.verify(valueOperations, Mockito.times(1)).multiSet(Mockito.anyMap());
+    }
+
+    @Test
+    void getCartDto_ShouldCreateNewCart_WhenCartDoesNotExistInDb() {
+        Long userId = 55L;
+        Long newCartId = 888L;
+
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.empty());
+
+        Mockito.when(cartRepository.save(Mockito.any(Cart.class))).thenAnswer(invocation -> {
+            Cart cartToSave = invocation.getArgument(0);
+            cartToSave.setId(newCartId);
+            return Mono.just(cartToSave);
+        });
+
+        Mockito.when(cartItemRepository.findByCartId(newCartId)).thenReturn(Flux.empty());
+
+        Mono<CartDto> result = cartService.getCartDto(userId);
+
+        StepVerifier.create(result)
+                .assertNext(cartDto -> {
+                    assertEquals(0L, cartDto.getTotal());
+                    assertEquals(0, cartDto.getItems().size());
+                })
+                .verifyComplete();
+
+        Mockito.verify(cartRepository, Mockito.times(1)).save(Mockito.any(Cart.class));
+    }
+
+    @Test
+    void changeItemQuantity_ShouldIncreaseQuantity_WhenActionIsPlus() {
+        Long productId = 10L;
+        Long userId = 1L;
+        Long cartId = 100L;
+
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+
+        CartItem mockCartItem = new CartItem();
+        mockCartItem.setCartId(cartId);
+        mockCartItem.setProductId(productId);
+        mockCartItem.setQuantity(5); // Было 5 штук
+
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
+        Mockito.when(cartItemRepository.findByCartIdAndProductId(cartId, productId))
+                .thenReturn(Mono.just(mockCartItem));
+
+        Mockito.when(cartItemRepository.save(Mockito.any(CartItem.class))).thenReturn(Mono.just(mockCartItem));
+
+        Mono<Void> result = cartService.changeItemQuantity(productId, "PLUS", userId);
+
+        StepVerifier.create(result)
+                .verifyComplete();
+
+        assertEquals(6, mockCartItem.getQuantity());
+        Mockito.verify(cartItemRepository, Mockito.times(1)).save(mockCartItem);
+        Mockito.verify(cartItemRepository, Mockito.never()).delete(Mockito.any(CartItem.class));
+    }
+
+    @Test
+    void changeItemQuantity_ShouldDecreaseQuantity_WhenActionIsMinusAndQuantityGreaterThanOne() {
+        Long productId = 10L;
+        Long userId = 1L;
+        Long cartId = 100L;
+
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+
+        CartItem mockCartItem = new CartItem();
+        mockCartItem.setCartId(cartId);
+        mockCartItem.setProductId(productId);
+        mockCartItem.setQuantity(3);
+
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
+        Mockito.when(cartItemRepository.findByCartIdAndProductId(cartId, productId))
+                .thenReturn(Mono.just(mockCartItem));
+
+        Mockito.when(cartItemRepository.save(Mockito.any(CartItem.class))).thenReturn(Mono.just(mockCartItem));
+
+        Mono<Void> result = cartService.changeItemQuantity(productId, "MINUS", userId);
+
+        StepVerifier.create(result).verifyComplete();
+
+        assertEquals(2, mockCartItem.getQuantity());
+        Mockito.verify(cartItemRepository, Mockito.times(1)).save(mockCartItem);
+        Mockito.verify(cartItemRepository, Mockito.never()).delete(Mockito.any(CartItem.class));
+    }
 
 
+    @Test
+    void changeItemQuantity_ShouldDeleteProduct_WhenActionIsMinusAndQuantityIsOne() {
+        Long productId = 10L;
+        Long userId = 1L;
+        Long cartId = 100L;
+
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+
+        CartItem mockCartItem = new CartItem();
+        mockCartItem.setCartId(cartId);
+        mockCartItem.setProductId(productId);
+        mockCartItem.setQuantity(1);
+
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
+        Mockito.when(cartItemRepository.findByCartIdAndProductId(cartId, productId))
+                .thenReturn(Mono.just(mockCartItem));
+
+        Mockito.when(cartItemRepository.delete(Mockito.any(CartItem.class))).thenReturn(Mono.empty());
+
+        Mono<Void> result = cartService.changeItemQuantity(productId, "MINUS", userId);
+
+        StepVerifier.create(result).verifyComplete();
+
+        Mockito.verify(cartItemRepository, Mockito.times(1)).delete(mockCartItem);
+        Mockito.verify(cartItemRepository, Mockito.never()).save(Mockito.any(CartItem.class));
+    }
+
+    @Test
+    void changeItemQuantity_ShouldDeleteProductImmediately_WhenActionIsDelete() {
+        Long productId = 10L;
+        Long userId = 1L;
+        Long cartId = 100L;
+
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+
+        CartItem mockCartItem = new CartItem();
+        mockCartItem.setCartId(cartId);
+        mockCartItem.setProductId(productId);
+        mockCartItem.setQuantity(15);
+
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
+        Mockito.when(cartItemRepository.findByCartIdAndProductId(cartId, productId))
+                .thenReturn(Mono.just(mockCartItem));
+
+        Mockito.when(cartItemRepository.delete(Mockito.any(CartItem.class))).thenReturn(Mono.empty());
+
+        Mono<Void> result = cartService.changeItemQuantity(productId, "DELETE", userId);
+
+        StepVerifier.create(result).verifyComplete();
+
+        Mockito.verify(cartItemRepository, Mockito.times(1)).delete(mockCartItem);
+        Mockito.verify(cartItemRepository, Mockito.never()).save(Mockito.any(CartItem.class));
+    }
+
+    @Test
+    void getCartDetailed_ShouldReturnCanOrderTrue_WhenBalanceIsSufficient() {
+        Long userId = 1L;
+
+        CartDto mockCart = new CartDto(new java.util.ArrayList<>(), 2000L);
+        Mockito.doReturn(Mono.just(mockCart)).when(cartService).getCartDto(userId);
+
+        BalanceResponse mockBalance = new BalanceResponse();
+        mockBalance.setAmount(5000L);
+        Mockito.when(paymentApi.getBalance()).thenReturn(Mono.just(mockBalance));
+
+        Mono<CartDetailedResponse> result = cartService.getCartDetailed(userId);
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(5000L, response.getBalance());
+                    assertEquals(2000L, response.getCart().getTotal());
+                    org.junit.jupiter.api.Assertions.assertTrue(response.isCanOrder());
+                    org.junit.jupiter.api.Assertions.assertNull(response.getErrorMessage());
+                })
+                .verifyComplete();
+
+    }
+
+    @Test
+    void getCartDetailed_ShouldReturnError_WhenBalanceIsLessThanCartTotal() {
+        Long userId = 1L;
+
+        CartDto mockCart = new CartDto(new java.util.ArrayList<>(), 4000L);
+        Mockito.doReturn(Mono.just(mockCart)).when(cartService).getCartDto(userId);
+
+        BalanceResponse mockBalance = new BalanceResponse();
+        mockBalance.setAmount(1500L);
+        Mockito.when(paymentApi.getBalance()).thenReturn(Mono.just(mockBalance));
+
+        Mono<CartDetailedResponse> result = cartService.getCartDetailed(userId);
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(1500L, response.getBalance());
+                    org.junit.jupiter.api.Assertions.assertFalse(response.isCanOrder());
+                    assertEquals("Недостаточно средств", response.getErrorMessage());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void getCartDetailed_ShouldReturnUnavailableError_WhenPaymentApiThrowsException() {
+        Long userId = 1L;
+
+        CartDto mockCart = new CartDto(new java.util.ArrayList<>(), 1000L);
+        Mockito.doReturn(Mono.just(mockCart)).when(cartService).getCartDto(userId);
+
+        Mockito.when(paymentApi.getBalance())
+                .thenReturn(Mono.error(new RuntimeException("Сбой сети или таймаут")));
+
+        Mono<CartDetailedResponse> result = cartService.getCartDetailed(userId);
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(-1L, response.getBalance());
+                    org.junit.jupiter.api.Assertions.assertFalse(response.isCanOrder());
+                    assertEquals("Сервис платежей недоступен", response.getErrorMessage());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void changeItemsCount_ShouldCreateCartAndItem_WhenCartDoesNotExistAndActionIsPlus() {
+        Long productId = 10L;
+        Long userId = 1L;
+        Long newCartId = 555L;
+
+        Product mockProduct = new Product();
+        mockProduct.setId(productId);
+
+        Mockito.when(productRepository.findById(productId)).thenReturn(Mono.just(mockProduct));
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.empty());
+
+        Mockito.when(cartRepository.save(Mockito.any(Cart.class))).thenAnswer(invocation -> {
+            Cart cart = invocation.getArgument(0);
+            cart.setId(newCartId);
+            return Mono.just(cart);
+        });
+
+        CartItem mockSavedItem = new CartItem(null, newCartId, productId, 1, null);
+        Mockito.when(cartItemRepository.save(Mockito.any(CartItem.class))).thenReturn(Mono.just(mockSavedItem));
+        Mono<Void> result = cartService.changeItemsCount(productId, "PLUS", userId);
+
+        StepVerifier.create(result).verifyComplete();
+
+        Mockito.verify(cartRepository, Mockito.times(1)).save(Mockito.any(Cart.class));
+        Mockito.verify(cartItemRepository, Mockito.times(1)).save(Mockito.any(CartItem.class));
+    }
+
+    @Test
+    void changeItemsCount_ShouldCreateNewItemInExistingCart_WhenItemDoesNotExistAndActionIsPlus() {
+        Long productId = 10L;
+        Long userId = 1L;
+        Long cartId = 100L;
+
+        Product mockProduct = new Product();
+        mockProduct.setId(productId);
+
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+
+        Mockito.when(productRepository.findById(productId)).thenReturn(Mono.just(mockProduct));
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
+
+        Mockito.when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.empty());
+
+        CartItem mockNewItem = new CartItem(null, cartId, productId, 1, null);
+        Mockito.when(cartItemRepository.save(Mockito.any(CartItem.class))).thenReturn(Mono.just(mockNewItem));
+
+        Mono<Void> result = cartService.changeItemsCount(productId, "PLUS", userId);
+
+        StepVerifier.create(result).verifyComplete();
+
+        Mockito.verify(cartRepository, Mockito.never()).save(Mockito.any(Cart.class));
+        Mockito.verify(cartItemRepository, Mockito.times(1)).save(Mockito.any(CartItem.class));
+    }
+
+    @Test
+    void changeItemsCount_ShouldIncreaseQuantity_WhenItemExistsAndActionIsPlus() {
+        Long productId = 10L;
+        Long userId = 1L;
+        Long cartId = 100L;
+
+        Product mockProduct = new Product();
+        mockProduct.setId(productId);
+
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+
+        CartItem existingItem = new CartItem(1L, cartId, productId, 3, null); // Было 3 штуки
+
+        Mockito.when(productRepository.findById(productId)).thenReturn(Mono.just(mockProduct));
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
+        Mockito.when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.just(existingItem));
+        Mockito.when(cartItemRepository.save(Mockito.any(CartItem.class))).thenReturn(Mono.just(existingItem));
+
+        // Вызов
+        Mono<Void> result = cartService.changeItemsCount(productId, "PLUS", userId);
+
+        StepVerifier.create(result).verifyComplete();
+
+        assertEquals(4, existingItem.getQuantity());
+        Mockito.verify(cartItemRepository, Mockito.times(1)).save(existingItem);
+        Mockito.verify(cartItemRepository, Mockito.never()).delete(Mockito.any(CartItem.class));
+    }
+
+    @Test
+    void changeItemsCount_ShouldDeleteItem_WhenItemExistsWithQuantityOneAndActionIsMinus() {
+        Long productId = 10L;
+        Long userId = 1L;
+        Long cartId = 100L;
+
+        Product mockProduct = new Product();
+        mockProduct.setId(productId);
+
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+
+        CartItem existingItem = new CartItem(1L, cartId, productId, 1, null); // Осталась всего 1 штука
+
+        Mockito.when(productRepository.findById(productId)).thenReturn(Mono.just(mockProduct));
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
+        Mockito.when(cartItemRepository.findByCartIdAndProductId(cartId, productId)).thenReturn(Mono.just(existingItem));
+        Mockito.when(cartItemRepository.delete(Mockito.any(CartItem.class))).thenReturn(Mono.empty());
+
+        // Вызов
+        Mono<Void> result = cartService.changeItemsCount(productId, "MINUS", userId);
+
+        StepVerifier.create(result).verifyComplete();
+
+        Mockito.verify(cartItemRepository, Mockito.times(1)).delete(existingItem);
+        Mockito.verify(cartItemRepository, Mockito.never()).save(Mockito.any(CartItem.class));
+
+    }
 
 
 }
