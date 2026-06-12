@@ -176,6 +176,7 @@ public class OrdersServiceTest extends BaseTest {
         Long cartId = 10L;
         Long orderId = 99L;
         Long productId = 500L;
+        String idempotencyKey = "1";
 
         Cart mockCart = new Cart();
         mockCart.setId(cartId);
@@ -202,19 +203,21 @@ public class OrdersServiceTest extends BaseTest {
         when(orderItemRepository.saveAll(anyList())).thenReturn(Flux.just(new OrderItem()));
         when(cartRepository.delete(mockCart)).thenReturn(Mono.empty());
 
-        StepVerifier.create(ordersService.processOrder(userId))
+        StepVerifier.create(ordersService.processOrder(userId, idempotencyKey))
                 .expectNext(orderId)
                 .verifyComplete();
     }
 
     @Test
     void processOrder_Payment4xxError_ReturnsCustomException() {
+        String idempotencyKey = "1";
+
         WebClientResponseException mockException = WebClientResponseException.create(
                 400, "Bad Request", null, null, null);
 
         when(paymentApi.processPayment(any(PaymentRequest.class))).thenReturn(Mono.error(mockException));
 
-        StepVerifier.create(ordersService.processOrder(userId))
+        StepVerifier.create(ordersService.processOrder(userId, idempotencyKey))
                 .expectErrorMatches(throwable -> throwable instanceof RuntimeException
                         && throwable.getMessage().equals("Оплата не прошла: недостаточно средств"))
                 .verify();
@@ -222,12 +225,14 @@ public class OrdersServiceTest extends BaseTest {
 
     @Test
     void processOrder_Payment5xxError_ReturnsCustomException() {
+        String idempotencyKey = "1";
+
         WebClientResponseException mockException = WebClientResponseException.create(
                 500, "Internal Server Error", null, null, null);
 
         when(paymentApi.processPayment(any(PaymentRequest.class))).thenReturn(Mono.error(mockException));
 
-        StepVerifier.create(ordersService.processOrder(userId))
+        StepVerifier.create(ordersService.processOrder(userId, idempotencyKey))
                 .expectErrorMatches(throwable -> throwable instanceof RuntimeException
                         && throwable.getMessage().equals("Сервис платежей временно недоступен"))
                 .verify();

@@ -122,6 +122,7 @@ public class OrderProcessingIntegrationTest {
         Long userId = 1L;
         Long cartId = 10L;
         Long expectedOrderId = 999L;
+        String idempotencyKey = "1";
 
         CartDto mockCartDto = new CartDto(List.of(), 3500L);
         Mockito.when(cartService.getCartDto(userId)).thenReturn(Mono.just(mockCartDto));
@@ -153,7 +154,7 @@ public class OrderProcessingIntegrationTest {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"status\":\"success\"}")));
 
-        Mono<Long> result = orderService.processOrder(userId);
+        Mono<Long> result = orderService.processOrder(userId, idempotencyKey);
 
         StepVerifier.create(result)
                 .expectNext(expectedOrderId)
@@ -164,6 +165,7 @@ public class OrderProcessingIntegrationTest {
     @WithMockUser(username = "customer_user")
     void processOrder_InsufficientFunds_ThrowsException() {
         Long userId = 1L;
+        String idempotencyKey = "1";
 
         CartDto mockCartDto = new CartDto(List.of(), 100000L);
         Mockito.when(cartService.getCartDto(userId)).thenReturn(Mono.just(mockCartDto));
@@ -175,7 +177,7 @@ public class OrderProcessingIntegrationTest {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"error\":\"Недостаточно средств\"}")));
 
-        Mono<Long> result = orderService.processOrder(userId);
+        Mono<Long> result = orderService.processOrder(userId, idempotencyKey);
 
         StepVerifier.create(result)
                 .expectErrorMatches(throwable -> throwable instanceof RuntimeException
@@ -187,6 +189,7 @@ public class OrderProcessingIntegrationTest {
     @WithMockUser(username = "customer_user")
     void processOrder_ServiceUnavailable_ThrowsException() {
         Long userId = 1L;
+        String idempotencyKey = "1";
 
         CartDto mockCartDto = new CartDto(List.of(), 500L);
         Mockito.when(cartService.getCartDto(userId)).thenReturn(Mono.just(mockCartDto));
@@ -196,7 +199,7 @@ public class OrderProcessingIntegrationTest {
                 .willReturn(aResponse()
                         .withStatus(500)));
 
-        Mono<Long> result = orderService.processOrder(userId);
+        Mono<Long> result = orderService.processOrder(userId, idempotencyKey);
 
         StepVerifier.create(result)
                 .expectErrorMatches(throwable -> throwable instanceof RuntimeException

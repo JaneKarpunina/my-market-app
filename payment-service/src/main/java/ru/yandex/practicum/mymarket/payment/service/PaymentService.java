@@ -1,11 +1,8 @@
 package ru.yandex.practicum.mymarket.payment.service;
 
-import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.payment.domain.BalanceResponse;
 import ru.yandex.practicum.mymarket.payment.domain.PaymentSuccessResponse;
@@ -53,19 +50,16 @@ public class PaymentService {
                                                 .thenReturn(successResponse)
                                 )
                                 .onErrorResume(ex ->
-                                        // Удаляем ключ блокировки из Redis и пробрасываем ошибку дальше через Mono.error()
                                         redisTemplate.delete(redisKey)
                                                 .then(Mono.error(ex))
                                 );
                     } else {
-                        // --- СЦЕНАРИЙ 2: Повторный клик/дубликат, пока первый запрос в обработке (или уже завершен) ---
                         return redisTemplate.opsForValue().get(redisKey)
                                 .flatMap(cachedStatus -> {
                                     if ("PROCESSING".equals(cachedStatus)) {
                                         return Mono.error(new ConflictException(
                                                 "Платеж уже обрабатывается. Пожалуйста, подождите."));
                                     }
-                                    // Если первый запрос уже успешно завершился — отдаем сохраненный ответ из кэша
                                     return Mono.just((PaymentSuccessResponse) cachedStatus);
                                 });
                     }
