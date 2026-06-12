@@ -61,9 +61,23 @@ public class PaymentClientConfig {
                         .switchIfEmpty(Mono.defer(() -> next.exchange(request)));
 
 
+        ExchangeFilterFunction idempotencyFilter = (request, next) ->
+                Mono.deferContextual(context -> {
+                    if (context.hasKey("CUSTOM_IDEMPOTENCY_KEY")) {
+                        String key = context.get("CUSTOM_IDEMPOTENCY_KEY");
+                        ClientRequest modifiedRequest = ClientRequest.from(request)
+                                .header("X-Idempotency-Key", key)
+                                .build();
+                        return next.exchange(modifiedRequest);
+                    }
+                    return next.exchange(request);
+                });
+
+
         WebClient.Builder webClientBuilder = WebClient.builder()
                 .filter(oauth2Filter)
-                .filter(userIdPropagatingFilter);
+                .filter(userIdPropagatingFilter)
+                .filter(idempotencyFilter);
 
         ApiClient apiClient = new ApiClient(webClientBuilder.build());
 

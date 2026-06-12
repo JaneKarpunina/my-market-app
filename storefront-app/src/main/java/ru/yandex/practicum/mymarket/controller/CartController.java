@@ -13,6 +13,8 @@ import ru.yandex.practicum.mymarket.dto.ItemChangeRequest;
 import ru.yandex.practicum.mymarket.entity.User;
 import ru.yandex.practicum.mymarket.service.CartService;
 
+import java.util.UUID;
+
 @Controller
 @RequestMapping("/cart/items")
 public class CartController {
@@ -28,6 +30,8 @@ public class CartController {
                                 @RequestParam(value = "error", required = false) String error,
                                 Model model) {
 
+        String newIdempotencyKey = UUID.randomUUID().toString();
+
         return cartService.getCartDetailed(currentUser.getId())
                 .doOnNext(data -> {
                     model.addAttribute("items", data.getCart().getItems());
@@ -35,6 +39,7 @@ public class CartController {
                     model.addAttribute("canOrder", data.isCanOrder());
                     model.addAttribute("errorMessage", data.getErrorMessage());
                     model.addAttribute("error", error);
+                    model.addAttribute("pageIdempotencyKey", newIdempotencyKey);
                 })
                 .thenReturn("cart");
     }
@@ -46,6 +51,8 @@ public class CartController {
 
         Long userId = currentUser.getId();
 
+        String freshIdempotencyKey = UUID.randomUUID().toString();
+
         return cartService.changeItemQuantity(itemChangeRequest.getId(), itemChangeRequest.getAction(), userId)
                 .then(Mono.defer(() -> cartService.getCartDetailed(userId))) // Получаем детали корзины по userId
                 .map(data -> Rendering.view("cart")
@@ -53,6 +60,7 @@ public class CartController {
                         .modelAttribute("total", data.getCart().getTotal())
                         .modelAttribute("canOrder",  data.isCanOrder())
                         .modelAttribute("errorMessage", data.getErrorMessage())
+                        .modelAttribute("pageIdempotencyKey", freshIdempotencyKey)
                         .build());
     }
 

@@ -1,5 +1,6 @@
 package ru.yandex.practicum.mymarket.service;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Service;
@@ -143,7 +144,7 @@ public class OrdersService {
     }
 
 
-    public Mono<Long> processOrder(Long userId) {
+    public Mono<Long> processOrder(Long userId, String idempotencyKey) {
 
         return cartService.getCartDto(userId)
                 .flatMap(cartDto -> {
@@ -152,11 +153,15 @@ public class OrdersService {
                     paymentRequest.setAmount(cartDto.getTotal());
 
                     return paymentApi.processPayment(paymentRequest)
+                            .contextWrite(context -> context.put("CUSTOM_IDEMPOTENCY_KEY", idempotencyKey))
                             .flatMap(paymentResponse -> saveOrder(userId));
                 })
                 .onErrorResume(WebClientResponseException.class, (WebClientResponseException ex) -> {
-                    if (ex.getStatusCode().is4xxClientError()) {
+                    if (ex.getStatusCode().equals(HttpStatus.BAD_REQUEST)) {
                         return Mono.error(new RuntimeException("Оплата не прошла: недостаточно средств"));
+                    }
+                    if (ex.getStatusCode().equals(HttpStatus.CONFLICT)) {
+                       return Mono.error(new RuntimeException("Платеж уже обрабатывается. Пожалуйста, подождите."));
                     }
                     return Mono.error(new RuntimeException("Сервис платежей временно недоступен"));
                 });

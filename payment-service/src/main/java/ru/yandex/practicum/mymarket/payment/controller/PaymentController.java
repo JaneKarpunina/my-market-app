@@ -1,5 +1,6 @@
 package ru.yandex.practicum.mymarket.payment.controller;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
@@ -33,10 +34,16 @@ public class PaymentController implements PaymentApi {
             ServerWebExchange exchange) {
 
         String userId = exchange.getRequest().getHeaders().getFirst("X-User-Id");
+        String idempotencyKey = exchange.getRequest().getHeaders().getFirst("X-Idempotency-Key");
+
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).build());
+        }
 
         return paymentRequest
-                .flatMap(request -> paymentService.charge(userId, request.getAmount()))
-                .then(Mono.just(ResponseEntity.ok(new PaymentSuccessResponse().status("success"))));
+                .flatMap(request -> paymentService
+                        .chargeIdempotent(idempotencyKey, userId, request.getAmount()))
+                .map(ResponseEntity::ok);
 
     }
 }

@@ -226,7 +226,7 @@ public class OrdersServiceTest extends BaseTest {
                 500, "Internal Server Error", null, null, null);
 
         when(paymentApi.processPayment(any(PaymentRequest.class))).thenReturn(Mono.error(mockException));
-        
+
         StepVerifier.create(ordersService.processOrder(userId))
                 .expectErrorMatches(throwable -> throwable instanceof RuntimeException
                         && throwable.getMessage().equals("Сервис платежей временно недоступен"))
