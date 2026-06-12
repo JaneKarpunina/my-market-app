@@ -23,19 +23,6 @@ public class BuyController {
         this.ordersService = ordersService;
     }
 
-
-//    @PostMapping
-//    public Mono<String> buy(@RequestParam("idempotencyKey") String idempotencyKey,
-//                            @AuthenticationPrincipal User currentUser) {
-//
-//        return ordersService.processOrder(currentUser.getId(), idempotencyKey)
-//                .map(id -> "redirect:/orders/" + id + "?newOrder=true")
-//                .onErrorResume(e ->
-//                    Mono.just("redirect:/cart/items?error=" +
-//                            UriUtils.encode(e.getMessage(), StandardCharsets.UTF_8))
-//                );
-//    }
-
     @PostMapping
     public Mono<String> buy(
             @AuthenticationPrincipal User currentUser,

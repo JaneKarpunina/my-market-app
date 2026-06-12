@@ -9,7 +9,7 @@ public class LoginController {
 
     @GetMapping("/login")
     public Mono<String> loginPage() {
-        return Mono.just("login"); // Имя файла login.html без расширения
+        return Mono.just("login");
     }
 }
 
