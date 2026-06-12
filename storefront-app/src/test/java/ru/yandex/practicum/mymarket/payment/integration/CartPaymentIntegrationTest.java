@@ -1,20 +1,30 @@
 package ru.yandex.practicum.mymarket.payment.integration;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.client.WireMock;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.ReactiveOAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.yandex.practicum.mymarket.ApiClient;
+import ru.yandex.practicum.mymarket.api.PaymentApi;
 import ru.yandex.practicum.mymarket.dto.CartDetailedResponse;
 import ru.yandex.practicum.mymarket.entity.Cart;
 import ru.yandex.practicum.mymarket.entity.CartItem;
@@ -25,14 +35,16 @@ import ru.yandex.practicum.mymarket.repository.CartRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 import ru.yandex.practicum.mymarket.service.CartService;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.reset;
+import java.time.Instant;
 
-@SpringBootTest
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
+import static org.assertj.core.api.Assertions.assertThat;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(EmbeddedRedisConfiguration.class)
-public class CartPaymentIntegrationTest {
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+class CartPaymentIntegrationTest {
 
     private static WireMockServer wireMockServer;
 
@@ -40,10 +52,10 @@ public class CartPaymentIntegrationTest {
     private CartService cartService;
 
     @Autowired
-    private ReactiveRedisTemplate<String, Object> redisTemplate;
+    private PaymentApi paymentApi;
 
     @Autowired
-    private ApiClient paymentApiClient;
+    private ReactiveRedisTemplate<String, Object> redisTemplate;
 
     @MockBean
     private CartRepository cartRepository;
@@ -54,101 +66,166 @@ public class CartPaymentIntegrationTest {
     @MockBean
     private ProductRepository productRepository;
 
-    private final String cartId = "cart-payment-test";
+    @MockBean
+    private ReactiveOAuth2AuthorizedClientManager authorizedClientManager;
 
     @BeforeAll
     static void startWireMock() {
-        wireMockServer = new WireMockServer(0);
+        wireMockServer = new WireMockServer(wireMockConfig().dynamicPort());
         wireMockServer.start();
+        WireMock.configureFor("localhost", wireMockServer.port());
     }
 
     @AfterAll
     static void stopWireMock() {
-        if (wireMockServer != null) {
-            wireMockServer.stop();
-        }
+        wireMockServer.stop();
+    }
+
+    @DynamicPropertySource
+    static void registerProperties(DynamicPropertyRegistry registry) {
+        registry.add("app.payment-service.url", () -> wireMockServer.baseUrl());
     }
 
     @BeforeEach
-    void setUp() {
-        redisTemplate.execute(connection -> connection.serverCommands().flushDb()).blockLast();
+    void setUpOAuth2Mock() {
         wireMockServer.resetAll();
-        reset(cartRepository, cartItemRepository, productRepository);
 
-        paymentApiClient.setBasePath("http://localhost:" + wireMockServer.port());
+        ClientRegistration clientRegistration = ClientRegistration.withRegistrationId("payment-service-client")
+                .clientId("test-client")
+                .tokenUri("http://localhost")
+                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                .build();
+
+        OAuth2AccessToken accessToken = new OAuth2AccessToken(
+                OAuth2AccessToken.TokenType.BEARER,
+                "fake-test-token",
+                Instant.now(),
+                Instant.now().plusSeconds(3600)
+        );
+
+        OAuth2AuthorizedClient authorizedClient = new OAuth2AuthorizedClient(
+                clientRegistration,
+                "anonymousUser",
+                accessToken
+        );
+        Mockito.when(authorizedClientManager.authorize(Mockito.any()))
+                .thenReturn(Mono.just(authorizedClient));
+    }
+
+    private void setupMockCartInDb(Long userId, Long cartId, Long productId, int quantity) {
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+        mockCart.setUserId(userId);
+
+        Mockito.when(cartRepository.findByUserId(userId))
+                .thenReturn(Mono.just(mockCart));
+
+        CartItem mockItem = new CartItem();
+        mockItem.setCartId(cartId);
+        mockItem.setProductId(productId);
+        mockItem.setQuantity(quantity);
+
+        Mockito.when(cartItemRepository.findByCartId(cartId))
+                .thenReturn(Flux.just(mockItem));
+    }
+
+    @Test
+    @WithMockUser(username = "customer_user")
+    void getCartDetailed_Success() {
+        Long userId = 1L;
+        Long cartId = 100L;
+        Long productId = 500L;
+        long productPrice = 1500L;
+        int quantity = 2;
+
+        setupMockCartInDb(userId, cartId, productId, quantity);
+
+        Product testProduct = new Product();
+        testProduct.setId(productId);
+        testProduct.setTitle("Тестовый товар");
+        testProduct.setPrice(productPrice);
+        redisTemplate.opsForValue().set("product:" + productId, testProduct).block();
+
+        stubFor(get(urlPathMatching(".*balance"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"amount\":5000}")));
+
+        Mono<CartDetailedResponse> result = cartService.getCartDetailed(userId);
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertThat(response.getBalance()).isEqualTo(5000L);
+                    assertThat(response.getCart().getTotal()).isEqualTo(3000L);
+                    assertThat(response.isCanOrder()).isTrue();
+                    assertThat(response.getErrorMessage()).isNull();
+                })
+                .verifyComplete();
+
+        verify(getRequestedFor(urlPathMatching(".*balance"))
+                .withHeader("X-User-Id", equalTo("customer_user")));
+    }
+
+    @Test
+    @WithMockUser(username = "customer_user")
+    void getCartDetailed_InsufficientFunds() {
+        Long userId = 1L;
+        Long cartId = 100L;
+        Long productId = 500L;
+        long productPrice = 2000L;
+        int quantity = 3;
+
+        setupMockCartInDb(userId, cartId, productId, quantity);
+
+        Product testProduct = new Product();
+        testProduct.setId(productId);
+        testProduct.setPrice(productPrice);
+        redisTemplate.opsForValue().set("product:" + productId, testProduct).block();
+
+        stubFor(get(urlPathMatching(".*balance"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"amount\":1500}")));
+
+        Mono<CartDetailedResponse> result = cartService.getCartDetailed(userId);
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertThat(response.getBalance()).isEqualTo(1500L);
+                    assertThat(response.getCart().getTotal()).isEqualTo(6000L);
+                    assertThat(response.isCanOrder()).isFalse();
+                    assertThat(response.getErrorMessage()).isEqualTo("Недостаточно средств");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @WithMockUser(username = "customer_user")
+    void getCartDetailed_PaymentServiceUnavailable() {
+        Long userId = 1L;
+        Long cartId = 100L;
 
         Cart mockCart = new Cart();
         mockCart.setId(cartId);
-        CartItem item = new CartItem(1L, cartId, 99L, 2, 1L);
-        Product product = new Product(99L, "Товар", "Описание",
-                "img.png", 500L, 1L);
-        doReturn(Mono.just(mockCart)).when(cartRepository).findById(cartId);
-        doReturn(Flux.just(item)).when(cartItemRepository).findByCartId(cartId);
-        doReturn(Flux.just(product)).when(productRepository).findAllById(any(Iterable.class));
-    }
+        mockCart.setUserId(userId);
 
-    @Test
-    void getCartDetailed_Success_WhenBalanceIsEnough() {
+        Mockito.when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
+        Mockito.when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.empty());
 
-        wireMockServer.stubFor(get(urlEqualTo("/api/v1/balance"))
-                .willReturn(aResponse()
-                        .withHeader("Content-Type", "application/json")
-                        .withStatus(200)
-                        // Баланс 1500, стоимость корзины 1000 -> средств хватает
-                        .withBody("{\"amount\": 1500}")));
+        stubFor(get(urlPathMatching(".*balance"))
+                .willReturn(aResponse().withStatus(500)));
 
-        Mono<CartDetailedResponse> result = cartService.getCartDetailed(cartId);
+        Mono<CartDetailedResponse> result = cartService.getCartDetailed(userId);
 
         StepVerifier.create(result)
                 .assertNext(response -> {
-                    assertNotNull(response);
-                    assertEquals(1000L, response.getCart().getTotal());
-                    assertEquals(1500L, response.getBalance());
-                    assertTrue(response.isCanOrder());
-                    assertNull(response.getErrorMessage());
+                    assertThat(response.getBalance()).isEqualTo(-1L);
+                    assertThat(response.isCanOrder()).isFalse();
+                    assertThat(response.getErrorMessage()).isEqualTo("Сервис платежей недоступен");
                 })
                 .verifyComplete();
     }
-
-    @Test
-    void getCartDetailed_Failed_WhenBalanceIsNotEnough() {
-
-        wireMockServer.stubFor(get(urlEqualTo("/api/v1/balance"))
-                .willReturn(aResponse()
-                        .withHeader("Content-Type", "application/json")
-                        .withStatus(200)
-                        .withBody("{\"amount\": 800}")));
-
-        Mono<CartDetailedResponse> result = cartService.getCartDetailed(cartId);
-
-        StepVerifier.create(result)
-                .assertNext(response -> {
-                    assertNotNull(response);
-                    assertEquals(1000L, response.getCart().getTotal());
-                    assertEquals(800L, response.getBalance());
-                    assertFalse(response.isCanOrder());
-                    assertEquals("Недостаточно средств", response.getErrorMessage());
-                })
-                .verifyComplete();
-    }
-
-    @Test
-    void getCartDetailed_Failed_WhenPaymentServiceIsUnavailable() {
-        wireMockServer.stubFor(get(urlEqualTo("/api/v1/balance"))
-                .willReturn(aResponse()
-                        .withStatus(500)));
-
-        Mono<CartDetailedResponse> result = cartService.getCartDetailed(cartId);
-
-        StepVerifier.create(result)
-                .assertNext(response -> {
-                    assertNotNull(response);
-                    assertEquals(-1L, response.getBalance());
-                    assertFalse(response.isCanOrder());
-                    assertEquals("Сервис платежей недоступен", response.getErrorMessage());
-                })
-                .verifyComplete();
-    }
-
-
 }
+

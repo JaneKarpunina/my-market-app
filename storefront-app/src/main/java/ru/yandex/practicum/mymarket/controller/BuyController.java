@@ -1,13 +1,14 @@
 package ru.yandex.practicum.mymarket.controller;
 
-import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.util.UriUtils;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.entity.User;
 import ru.yandex.practicum.mymarket.service.OrdersService;
 
 import java.nio.charset.StandardCharsets;
@@ -22,16 +23,25 @@ public class BuyController {
         this.ordersService = ordersService;
     }
 
-
     @PostMapping
-    public Mono<String> buy(@CookieValue(value = "cartId", required = false) String cartId,
-                            ServerHttpResponse response) {
+    public Mono<String> buy(
+            @AuthenticationPrincipal User currentUser,
+            ServerWebExchange exchange) {
 
-        return ordersService.processOrder(cartId, response)
+        return exchange.getFormData()
+                .flatMap(formData -> {
+                    String idempotencyKey = formData.getFirst("idempotencyKey");
+
+                    if (idempotencyKey == null || idempotencyKey.isBlank()) {
+                        return Mono.error(new RuntimeException("Ключ идемпотентности не найден в форме"));
+                    }
+
+                    return ordersService.processOrder(currentUser.getId(), idempotencyKey);
+                })
                 .map(id -> "redirect:/orders/" + id + "?newOrder=true")
                 .onErrorResume(e ->
-                    Mono.just("redirect:/cart/items?error=" +
-                            UriUtils.encode(e.getMessage(), StandardCharsets.UTF_8))
+                        Mono.just("redirect:/cart/items?error=" +
+                                UriUtils.encode(e.getMessage(), StandardCharsets.UTF_8))
                 );
     }
 }

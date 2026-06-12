@@ -1,8 +1,6 @@
 package ru.yandex.practicum.mymarket.service;
 
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
-import org.springframework.http.ResponseCookie;
-import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -21,7 +19,10 @@ import ru.yandex.practicum.mymarket.repository.CartRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static ru.yandex.practicum.mymarket.enums.CartAction.*;
@@ -48,21 +49,21 @@ public class CartService {
     }
 
     @Transactional
-    public Mono<CartDto> getCartDto(String cartId) {
-        if (cartId == null || cartId.isEmpty()) {
+    public Mono<CartDto> getCartDto(Long userId) {
+        if (userId == null) {
             return Mono.just(new CartDto(List.of(), 0L));
         }
 
-        return getOrCreateCart(cartId)
-                .flatMap(cart -> cartItemRepository.findByCartId(cartId).collectList())
+        return getOrCreateCart(userId)
+                .flatMap(cart -> cartItemRepository.findByCartId(cart.getId()).collectList())
                 .flatMap(this::processCartItems);
     }
 
-    private Mono<Cart> getOrCreateCart(String cartId) {
-        return cartRepository.findById(cartId)
+    private Mono<Cart> getOrCreateCart(Long userId) {
+        return cartRepository.findByUserId(userId)
                 .switchIfEmpty(Mono.defer(() -> {
                     Cart newCart = new Cart();
-                    newCart.setId(cartId);
+                    newCart.setUserId(userId);
                     return cartRepository.save(newCart);
                 }));
     }
@@ -145,11 +146,12 @@ public class CartService {
     }
 
     @Transactional
-    public Mono<Void> changeItemQuantity(Long id, String action, String cartId) {
+    public Mono<Void> changeItemQuantity(Long id, String action, Long userId) {
 
         CartAction cartAction = CartAction.valueOf(action);
 
-        return cartItemRepository.findByCartIdAndProductId(cartId, id)
+        return cartRepository.findByUserId(userId)
+                .flatMap(cart -> cartItemRepository.findByCartIdAndProductId(cart.getId(), id))
                 .flatMap(cartItem -> {
                     int quantity = cartItem.getQuantity();
                     if (quantity == 1 && MINUS == cartAction || DELETE == cartAction) {
@@ -169,8 +171,9 @@ public class CartService {
                 .then();
     }
 
-    public Mono<CartDetailedResponse> getCartDetailed(String cartId) {
-        Mono<CartDto> cartMono = getCartDto(cartId);
+
+    public Mono<CartDetailedResponse> getCartDetailed(Long userId) {
+        Mono<CartDto> cartMono = getCartDto(userId);
 
         Mono<Long> balanceMono = paymentApi.getBalance()
                 .map(BalanceResponse::getAmount)
@@ -192,67 +195,45 @@ public class CartService {
                         canOrder = false;
                     }
                     return new CartDetailedResponse(cart, balance, canOrder, error);
+
                 });
     }
 
     @Transactional
-    public Mono<Void> changeItemsCount(Long id, String action, ServerHttpResponse response, String cartId) {
-
+    public Mono<Void> changeItemsCount(Long id, String action, Long userId) {
         CartAction cartAction = CartAction.valueOf(action);
 
         return productRepository.findById(id)
-                .flatMap(product -> {
-                    // Если cartId нет и действие PLUS — создаем новую корзину
-                    if (cartId == null || cartId.isEmpty()) {
-                        if (PLUS == cartAction) {
-                            String newCartId = UUID.randomUUID().toString();
-                            addCartCookie(response, newCartId);
-                            return createCartAndItem(id, newCartId);
-                        }
-                        return Mono.empty();
-                    }
-
-                    return cartRepository.findById(cartId)
-                            // Если кука есть, но корзины в БД нет (например, удалена)
-                            .switchIfEmpty(Mono.defer(() -> {
-                                if (PLUS == cartAction) {
-                                    return createCartAndItem(id, cartId).then(Mono.empty());
-                                }
-                                return Mono.empty();
-                            }))
-                            .flatMap(cart -> setCartItem(id, action, cartId));
-
-
-                });
+                .flatMap(product -> cartRepository.findByUserId(userId)
+                        // Если корзины у пользователя нет, создаем новую
+                        .switchIfEmpty(Mono.defer(() -> {
+                            if (PLUS == cartAction) {
+                                return createCartAndItem(id, userId).then(Mono.empty());
+                            }
+                            return Mono.empty();
+                        }))
+                        .flatMap(cart -> setCartItem(id, action, cart.getId()))
+                );
     }
 
-    private void addCartCookie(ServerHttpResponse response, String cartId) {
-        ResponseCookie cookie = ResponseCookie.from("cartId", cartId)
-                .maxAge(Duration.ofDays(7))
-                .path("/")
-                .httpOnly(true)
-                .build();
-        response.addCookie(cookie);
-    }
-
-    private Mono<Void> createCartAndItem(Long id, String cartId) {
+    private Mono<Void> createCartAndItem(Long id, Long userId) {
         Cart cart = new Cart();
-        cart.setId(cartId);
+        cart.setUserId(userId);
 
         return cartRepository.save(cart)
-                .then(Mono.defer(() -> {
+                .flatMap(savedCart -> {
                     CartItem item = new CartItem();
-                    item.setCartId(cartId);
+                    item.setCartId(savedCart.getId()); // Подставляем сгенерированный базой Long id корзины
                     item.setProductId(id);
                     item.setQuantity(1);
-                    // version и id не трогаем, они останутся null
-                    return cartItemRepository.save(item); }))
+                    return cartItemRepository.save(item);
+                })
                 .then();
     }
 
-    private Mono<Void> setCartItem(Long id, String action, String cartId) {
-
+    private Mono<Void> setCartItem(Long id, String action, Long cartId) { // cartId теперь Long
         CartAction cartAction = CartAction.valueOf(action);
+
         return cartItemRepository.findByCartIdAndProductId(cartId, id)
                 .switchIfEmpty(Mono.defer(() -> {
                     if (PLUS == cartAction) {

@@ -19,10 +19,7 @@ import ru.yandex.practicum.mymarket.domain.PaymentSuccessResponse;
 import ru.yandex.practicum.mymarket.dto.CartDto;
 import ru.yandex.practicum.mymarket.dto.ItemDto;
 import ru.yandex.practicum.mymarket.dto.OrderDto;
-import ru.yandex.practicum.mymarket.entity.CartItem;
-import ru.yandex.practicum.mymarket.entity.Order;
-import ru.yandex.practicum.mymarket.entity.OrderItem;
-import ru.yandex.practicum.mymarket.entity.Product;
+import ru.yandex.practicum.mymarket.entity.*;
 import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
@@ -53,12 +50,9 @@ public class OrdersServiceTest extends BaseTest {
     private ProductRepository productRepository;
 
     @MockBean
-    private ServerHttpResponse response;
-
-    @MockBean
     private PaymentApi paymentApi;
 
-    private final String cartId = "cart-111";
+    private final Long userId = 1L;
     private final Long orderId = 777L;
 
     @BeforeEach
@@ -70,210 +64,177 @@ public class OrdersServiceTest extends BaseTest {
         reset(paymentApi);
 
         CartDto mockCartDto = new CartDto(List.of(), 1500L);
-        lenient().when(cartService.getCartDto(cartId)).thenReturn(Mono.just(mockCartDto));
+        lenient().when(cartService.getCartDto(userId)).thenReturn(Mono.just(mockCartDto));
     }
 
     @Test
-    void getOrders_ShouldReturnFluxOfOrderDtos_WhenItemsExist() {
+    void getOrders_Success() {
 
-        OrderItem item1 = new OrderItem(1L, 100L, 10L, 2, 1L);
-        OrderItem item2 = new OrderItem(2L, 100L, 20L, 1, 1L);
-
-        Product product1 = new Product(10L, "Товар 1", "Описание 1",
-                "img1.jpg", 500L, 1L);
-        Product product2 = new Product(20L, "Товар 2", "Описание 2",
-                "img2.jpg", 300L, 1L);
-
-        OrderItem itemFromAnotherOrder = new OrderItem(3L, 200L, 10L, 1, 1L);
-
-        when(orderItemRepository.findAll()).thenReturn(Flux.just(item1, item2, itemFromAnotherOrder));
-        when(productRepository.findByIdIn(any())).thenReturn(Flux.just(product1, product2));
-
-        Flux<OrderDto> resultFlux = ordersService.getOrders();
-
-        StepVerifier.create(resultFlux)
-                .recordWith(java.util.ArrayList::new)
-                .expectNextCount(2)
-                .consumeRecordedWith(orders -> {
-                    OrderDto order100 = orders.stream()
-                            .filter(o -> o.getId().equals(100L)).findFirst().orElseThrow();
-                    assertEquals(2, order100.getItems().size());
-                    assertEquals(1300L, order100.getTotalSum());
-
-                    OrderDto order200 = orders.stream()
-                            .filter(o -> o.getId().equals(200L)).findFirst().orElseThrow();
-                    assertEquals(1, order200.getItems().size());
-                    assertEquals(500L, order200.getTotalSum());
-                })
-                .verifyComplete();
-    }
-
-    @Test
-    void getOrders_ShouldReturnEmptyFlux_WhenNoItemsFound() {
-        when(orderItemRepository.findAll()).thenReturn(Flux.empty());
-
-        Flux<OrderDto> resultFlux = ordersService.getOrders();
-
-        StepVerifier.create(resultFlux)
-                .expectNextCount(0)
-                .verifyComplete();
-    }
-
-    @Test
-    void getOrder_ShouldReturnOrderDtoWithItems_WhenOrderExists() {
-
-        OrderItem item1 = new OrderItem(1L, 100L, 10L, 2, 1L);
-        OrderItem item2 = new OrderItem(2L, 100L, 20L, 1, 1L);
-
-        Product product1 = new Product(10L, "Товар 1", "Описание 1",
-                "img1.jpg", 500L, 1L);
-        Product product2 = new Product(20L, "Товар 2", "Описание 2",
-                "img2.jpg", 300L, 1L);
-
-        when(orderItemRepository.findByOrderId(100L)).thenReturn(Flux.just(item1, item2));
-        when(productRepository.findByIdIn(any())).thenReturn(Flux.just(product1, product2));
-
-
-        Mono<OrderDto> resultMono = ordersService.getOrder(100L);
-
-        StepVerifier.create(resultMono)
-                .assertNext(orderDto -> {
-                    assertEquals(100L, orderDto.getId());
-                    assertEquals(2, orderDto.getItems().size());
-                    assertEquals(1300L, orderDto.getTotalSum());
-
-                    ItemDto firstItem = orderDto.getItems().getFirst();
-                    assertEquals("Товар 1", firstItem.getTitle());
-                    assertEquals(2, firstItem.getCount());
-                })
-                .verifyComplete();
-    }
-
-    @Test
-    void getOrder_ShouldReturnEmptyOrderDto_WhenOrderDoesNotExist() {
-
-        when(orderItemRepository.findByOrderId(999L)).thenReturn(Flux.empty());
-
-        Mono<OrderDto> resultMono = ordersService.getOrder(999L);
-
-        StepVerifier.create(resultMono)
-                .assertNext(orderDto -> {
-                    assertNull(orderDto.getId());
-                    assertNull(orderDto.getItems());
-                    assertEquals(0L, orderDto.getTotalSum());
-                })
-                .verifyComplete();
-    }
-
-
-    @Test
-    void saveOrder_Success() {
-        String cartId = "test-cart";
-        Long savedOrderId = 10L;
-
-        Order orderEntity = new Order();
-        orderEntity.setId(savedOrderId);
-
-        CartItem ci1 = new CartItem(1L, cartId, 101L, 2, 0L);
-        CartItem ci2 = new CartItem(2L, cartId, 102L, 1, 0L);
-
-        when(orderRepository.save(any(Order.class))).thenReturn(Mono.just(orderEntity));
-        when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.just(ci1, ci2));
-
-        when(orderItemRepository.saveAll(anyIterable())).thenReturn(Flux.just(new OrderItem(), new OrderItem()));
-
-        when(cartRepository.deleteById(cartId)).thenReturn(Mono.empty());
-
-        StepVerifier.create(ordersService.saveOrder(cartId, response))
-                .expectNext(savedOrderId)
-                .verifyComplete();
-
-        verify(orderItemRepository).saveAll((Iterable<OrderItem>) argThat(items -> {
-            List<OrderItem> list = StreamSupport.stream(((Iterable<OrderItem>) items).spliterator(), false)
-                    .collect(Collectors.toList());
-
-            return list.size() == 2 && list.stream().allMatch(oi -> oi.getOrderId().equals(savedOrderId));
-        }));
-
-        verify(cartRepository).deleteById(cartId);
-        verify(response).addCookie(argThat(cookie ->
-                cookie.getName().equals("cartId") && cookie.getMaxAge().isZero()
-        ));
-    }
-
-    @Test
-    void processOrder_Success_ShouldCompletePaymentAndSaveOrder() {
-
-        PaymentSuccessResponse paymentResponse = new PaymentSuccessResponse();
-        paymentResponse.setStatus("success");
-        when(paymentApi.processPayment(any(PaymentRequest.class))).thenReturn(Mono.just(paymentResponse));
+        Long orderId = 100L;
+        Long productId = 500L;
 
         Order mockOrder = new Order();
         mockOrder.setId(orderId);
+        mockOrder.setUserId(userId);
+
+        OrderItem mockItem = new OrderItem();
+        mockItem.setOrderId(orderId);
+        mockItem.setProductId(productId);
+        mockItem.setQuantity(2);
+
+        Product mockProduct = new Product();
+        mockProduct.setId(productId);
+        mockProduct.setTitle("Кофеварка");
+        mockProduct.setPrice(1500L);
+
+        when(orderRepository.findByUserId(userId)).thenReturn(Flux.just(mockOrder));
+        when(orderItemRepository.findByOrderIdIn(List.of(orderId))).thenReturn(Flux.just(mockItem));
+        when(productRepository.findByIdIn(List.of(productId))).thenReturn(Flux.just(mockProduct));
+
+        StepVerifier.create(ordersService.getOrders(userId))
+                .assertNext(orderDto -> {
+                    assertEquals(orderId, orderDto.getId());
+                    assertEquals(3000L, orderDto.getTotalSum());
+                    assertEquals(1, orderDto.getItems().size());
+
+                    ItemDto itemDto = orderDto.getItems().getFirst();
+                    assertEquals(productId, itemDto.getId());
+                    assertEquals("Кофеварка", itemDto.getTitle());
+                    assertEquals(2, itemDto.getCount());
+                })
+                .verifyComplete();
+    }
+
+
+    @Test
+    void getOrders_NoOrders_ReturnsEmptyFlux() {
+        when(orderRepository.findByUserId(userId)).thenReturn(Flux.empty());
+
+        StepVerifier.create(ordersService.getOrders(userId))
+                .verifyComplete();
+    }
+
+    @Test
+    void getOrder_Success() {
+
+        Long orderId = 100L;
+        Long productId = 500L;
+
+        Order mockOrder = new Order();
+        mockOrder.setId(orderId);
+        mockOrder.setUserId(userId);
+
+        OrderItem mockItem = new OrderItem();
+        mockItem.setOrderId(orderId);
+        mockItem.setProductId(productId);
+        mockItem.setQuantity(3);
+
+        Product mockProduct = new Product();
+        mockProduct.setId(productId);
+        mockProduct.setTitle("Клавиатура");
+        mockProduct.setPrice(2000L);
+
+        when(orderRepository.findById(orderId)).thenReturn(Mono.just(mockOrder));
+        when(orderItemRepository.findByOrderId(orderId)).thenReturn(Flux.just(mockItem));
+        when(productRepository.findByIdIn(List.of(productId))).thenReturn(Flux.just(mockProduct));
+
+        StepVerifier.create(ordersService.getOrder(orderId, userId))
+                .assertNext(orderDto -> {
+                    assertEquals(orderId, orderDto.getId());
+                    assertEquals(6000L, orderDto.getTotalSum()); // 2000 * 3
+                    assertEquals(1, orderDto.getItems().size());
+
+                    ItemDto itemDto = orderDto.getItems().getFirst();
+                    assertEquals("Клавиатура", itemDto.getTitle());
+                    assertEquals(3, itemDto.getCount());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void getOrder_WrongUser_ReturnsEmptyOrderDto() {
+        Long orderId = 100L;
+        Long wrongUserId = 999L;
+
+        Order mockOrder = new Order();
+        mockOrder.setId(orderId);
+        mockOrder.setUserId(wrongUserId);
+
+        when(orderRepository.findById(orderId)).thenReturn(Mono.just(mockOrder));
+
+        StepVerifier.create(ordersService.getOrder(orderId, userId))
+                .assertNext(orderDto -> {
+                    assertNull(orderDto.getId());
+                    assertNull(orderDto.getItems());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void processOrder_Success() {
+
+        Long cartId = 10L;
+        Long orderId = 99L;
+        Long productId = 500L;
+        String idempotencyKey = "1";
+
+        Cart mockCart = new Cart();
+        mockCart.setId(cartId);
+        mockCart.setUserId(userId);
+
+        CartItem mockCartItem = new CartItem();
+        mockCartItem.setCartId(cartId);
+        mockCartItem.setProductId(productId);
+        mockCartItem.setQuantity(2);
+
+        Order mockOrder = new Order();
+        mockOrder.setId(orderId);
+        mockOrder.setUserId(userId);
+
+        CartDto customCartDto = new CartDto(List.of(), 1500L);
+        when(cartService.getCartDto(userId)).thenReturn(Mono.just(customCartDto));
+
+        when(paymentApi.processPayment(any(PaymentRequest.class)))
+                .thenReturn(Mono.just(new PaymentSuccessResponse()));
+
+        when(cartRepository.findByUserId(userId)).thenReturn(Mono.just(mockCart));
         when(orderRepository.save(any(Order.class))).thenReturn(Mono.just(mockOrder));
+        when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.just(mockCartItem));
+        when(orderItemRepository.saveAll(anyList())).thenReturn(Flux.just(new OrderItem()));
+        when(cartRepository.delete(mockCart)).thenReturn(Mono.empty());
 
-        CartItem cartItem = new CartItem(1L, cartId, 42L, 2, 1L);
-        when(cartItemRepository.findByCartId(cartId)).thenReturn(Flux.just(cartItem));
-        when(orderItemRepository.saveAll(any(Iterable.class))).thenReturn(Flux.just(new OrderItem()));
-        when(cartRepository.deleteById(cartId)).thenReturn(Mono.empty());
-
-        MockServerHttpResponse response = new MockServerHttpResponse();
-
-        Mono<Long> result = ordersService.processOrder(cartId, response);
-
-        StepVerifier.create(result)
+        StepVerifier.create(ordersService.processOrder(userId, idempotencyKey))
                 .expectNext(orderId)
                 .verifyComplete();
-
-        verify(orderRepository, times(1)).save(any(Order.class));
-        verify(cartRepository, times(1)).deleteById(cartId);
-
-        ResponseCookie deletedCookie = response.getCookies().getFirst("cartId");
-        assertNotNull(deletedCookie);
-        assertEquals("", deletedCookie.getValue());
-        assertEquals(0, deletedCookie.getMaxAge().getSeconds());
     }
 
     @Test
-    void processOrder_Failed_WhenInsufficientFunds_ShouldThrowAndNotSaveOrder() {
+    void processOrder_Payment4xxError_ReturnsCustomException() {
+        String idempotencyKey = "1";
 
-        WebClientResponseException ex400 = WebClientResponseException.create(
-                HttpStatus.BAD_REQUEST.value(), "Bad Request", null, null, null);
+        WebClientResponseException mockException = WebClientResponseException.create(
+                400, "Bad Request", null, null, null);
 
-        when(paymentApi.processPayment(any(PaymentRequest.class))).thenReturn(Mono.error(ex400));
+        when(paymentApi.processPayment(any(PaymentRequest.class))).thenReturn(Mono.error(mockException));
 
-        MockServerHttpResponse response = new MockServerHttpResponse();
-
-        Mono<Long> result = ordersService.processOrder(cartId, response);
-
-        StepVerifier.create(result)
-                .expectErrorMessage("Оплата не прошла: недостаточно средств")
+        StepVerifier.create(ordersService.processOrder(userId, idempotencyKey))
+                .expectErrorMatches(throwable -> throwable instanceof RuntimeException
+                        && throwable.getMessage().equals("Оплата не прошла: недостаточно средств"))
                 .verify();
-
-        verify(orderRepository, never()).save(any(Order.class));
-        verify(cartRepository, never()).deleteById(anyString());
-
-        assertNull(response.getCookies().getFirst("cartId"));
     }
 
     @Test
-    void processOrder_Failed_WhenPaymentServiceIsDown_ShouldThrowServiceUnavailable() {
+    void processOrder_Payment5xxError_ReturnsCustomException() {
+        String idempotencyKey = "1";
 
-        WebClientResponseException ex500 = WebClientResponseException.create(
-                HttpStatus.INTERNAL_SERVER_ERROR.value(), "Internal Error",
-                null, null, null);
+        WebClientResponseException mockException = WebClientResponseException.create(
+                500, "Internal Server Error", null, null, null);
 
-        when(paymentApi.processPayment(any(PaymentRequest.class))).thenReturn(Mono.error(ex500));
+        when(paymentApi.processPayment(any(PaymentRequest.class))).thenReturn(Mono.error(mockException));
 
-        MockServerHttpResponse response = new MockServerHttpResponse();
-
-        Mono<Long> result = ordersService.processOrder(cartId, response);
-
-        StepVerifier.create(result)
-                .expectErrorMessage("Сервис платежей временно недоступен")
+        StepVerifier.create(ordersService.processOrder(userId, idempotencyKey))
+                .expectErrorMatches(throwable -> throwable instanceof RuntimeException
+                        && throwable.getMessage().equals("Сервис платежей временно недоступен"))
                 .verify();
-
-        verify(orderRepository, never()).save(any(Order.class));
-        verify(cartRepository, never()).deleteById(anyString());
     }
 }

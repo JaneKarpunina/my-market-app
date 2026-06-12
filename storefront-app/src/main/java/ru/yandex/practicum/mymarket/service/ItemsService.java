@@ -11,6 +11,7 @@ import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.entity.CartItem;
 import ru.yandex.practicum.mymarket.entity.Product;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
+import ru.yandex.practicum.mymarket.repository.CartRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
 import java.time.Duration;
@@ -29,17 +30,20 @@ public class ItemsService {
     private final ProductRepository productRepository;
     private final CartItemRepository cartItemRepository;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
+    private final CartRepository cartRepository;
 
     public ItemsService(ProductRepository productRepository,
-                        CartItemRepository cartItemRepository, ReactiveRedisTemplate<String, Object> redisTemplate) {
+                        CartItemRepository cartItemRepository, ReactiveRedisTemplate<String, Object> redisTemplate,
+                        CartRepository cartRepository) {
         this.productRepository = productRepository;
         this.cartItemRepository = cartItemRepository;
         this.redisTemplate = redisTemplate;
+        this.cartRepository = cartRepository;
     }
 
     @Transactional(readOnly = true)
     public Mono<ItemsWithPaging> getItemsWithPaging(String search, String sort, int pageNumber, int pageSize,
-                                                    String cartId) {
+                                                    Long userId) {
         String searchPattern = (search == null) ? "" : search;
         long offset = (long) (Math.max(1, pageNumber) - 1) * pageSize;
 
@@ -54,7 +58,7 @@ public class ItemsService {
             long totalItems = tuple.getT2();
 
             return getProductsByIds(productIds)
-                    .flatMap(products -> enrichWithQuantity(products, cartId)
+                    .flatMap(products -> enrichWithQuantity(products, userId)
                             .map(itemDtos -> {
                                 int totalPages = (int) Math.ceil((double) totalItems / pageSize);
                                 int currentPage = Math.max(1,
@@ -99,8 +103,8 @@ public class ItemsService {
                         : Mono.just(list));
     }
 
-    private Mono<List<ItemDto>> enrichWithQuantity(List<Product> products, String cartId) {
-        if (cartId == null || products.isEmpty()) {
+    private Mono<List<ItemDto>> enrichWithQuantity(List<Product> products, Long userId) {
+        if (userId == null || products.isEmpty()) {
             return Mono.just(products.stream()
                     .map(p -> new ItemDto(p.getId(), p.getTitle(), p.getDescription(), p.getImgPath(),
                             p.getPrice(), 0))
@@ -108,13 +112,20 @@ public class ItemsService {
         }
 
         List<Long> ids = products.stream().map(Product::getId).toList();
-        return cartItemRepository.findAllByCartIdAndProductIds(cartId, ids)
-                .collectMap(CartItem::getProductId, CartItem::getQuantity)
-                .map(quantities -> products.stream()
-                        .map(p -> new ItemDto(
-                                p.getId(), p.getTitle(), p.getDescription(), p.getImgPath(), p.getPrice(),
-                                quantities.getOrDefault(p.getId(), 0)
-                        )).toList());
+
+        return cartRepository.findByUserId(userId)
+                .flatMap(cart -> cartItemRepository.findAllByCartIdAndProductIds(cart.getId(), ids)
+                        .collectMap(CartItem::getProductId, CartItem::getQuantity)
+                        .map(quantities -> products.stream()
+                                .map(p -> new ItemDto(
+                                        p.getId(), p.getTitle(), p.getDescription(), p.getImgPath(), p.getPrice(),
+                                        quantities.getOrDefault(p.getId(), 0)
+                                )).toList())
+                )
+                .defaultIfEmpty(products.stream()
+                        .map(p -> new ItemDto(p.getId(), p.getTitle(), p.getDescription(), p.getImgPath(),
+                                p.getPrice(), 0))
+                        .toList());
     }
 
     private Mono<List<Product>> getProductsByIds(List<Long> productIds) {
@@ -203,13 +214,13 @@ public class ItemsService {
     }
 
     @Transactional(readOnly = true)
-    public Mono<ItemDto> getItemWithQuantity(Long id, String cartId) {
+    public Mono<ItemDto> getItemWithQuantity(Long id, Long userId) {
         if (id == null) {
             return Mono.just(new ItemDto());
         }
 
         return getProductWithCache(id)
-                .flatMap(product -> enrichWithCartQuantity(product, cartId))
+                .flatMap(product -> enrichWithCartQuantity(product, userId))
                 .defaultIfEmpty(new ItemDto());
     }
 
@@ -228,12 +239,13 @@ public class ItemsService {
                 ));
     }
 
-    private Mono<ItemDto> enrichWithCartQuantity(Product product, String cartId) {
-        if (cartId == null || cartId.isEmpty()) {
+    private Mono<ItemDto> enrichWithCartQuantity(Product product, Long userId) {
+        if (userId == null) {
             return Mono.just(mapToItemDto(product, 0));
         }
 
-        return cartItemRepository.findByCartIdAndProductId(cartId, product.getId())
+        return cartRepository.findByUserId(userId)
+                .flatMap(cart -> cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId()))
                 .map(cartItem -> mapToItemDto(product, cartItem.getQuantity()))
                 .defaultIfEmpty(mapToItemDto(product, 0));
     }
@@ -248,4 +260,5 @@ public class ItemsService {
                 quantity
         );
     }
+
 }

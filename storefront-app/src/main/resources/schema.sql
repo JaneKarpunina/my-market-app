@@ -1,7 +1,18 @@
+create table if not exists users
+(
+    id         bigint AUTO_INCREMENT primary key,
+    username   varchar(50) not null,
+    password   varchar(60) not null,
+    version    bigint default 0,
+    constraint unique_username unique (username)
+    );
+
 create table if not exists cart
 (
-    id         varchar(255) primary key,
-    version    bigint default 0
+    id         bigint AUTO_INCREMENT primary key,
+    user_id    bigint not null,
+    version    bigint default 0,
+    constraint fk_cart_user_id foreign key (user_id) references users(id) on delete cascade
     );
 
 create table if not exists product
@@ -17,13 +28,15 @@ create table if not exists product
  create table if not exists orders
  (
      id         bigint AUTO_INCREMENT primary key,
-     version    bigint default 0
+     user_id    bigint not null,
+     version    bigint default 0,
+     constraint fk_orders_user_id foreign key (user_id) references users(id) on delete cascade
      );
 
  create table if not exists cart_item
  (
      id        bigint AUTO_INCREMENT primary key,
-     cart_id   varchar(255) not null,
+     cart_id   bigint not null,
      product_id bigint not null,
      quantity  int not null,
      version   bigint default 0,

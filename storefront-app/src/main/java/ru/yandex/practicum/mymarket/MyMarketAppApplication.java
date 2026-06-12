@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class MyMarketAppApplication {
 
 	public static void main(String[] args) {
+
 		SpringApplication.run(MyMarketAppApplication.class, args);
 	}
 

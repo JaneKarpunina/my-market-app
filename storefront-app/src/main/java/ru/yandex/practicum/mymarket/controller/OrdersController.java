@@ -1,6 +1,7 @@
 package ru.yandex.practicum.mymarket.controller;
 
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.reactive.result.view.Rendering;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.entity.User;
 import ru.yandex.practicum.mymarket.service.OrdersService;
 
 @Controller
@@ -22,8 +24,8 @@ public class OrdersController {
     }
 
     @GetMapping
-    public Mono<Rendering> getOrders() {
-        return ordersService.getOrders()
+    public Mono<Rendering> getOrders(@AuthenticationPrincipal User currentUser) {
+        return ordersService.getOrders(currentUser.getId())
                 .collectList()
                 .map(orders -> Rendering.view("orders")
                         .modelAttribute("orders", orders)
@@ -32,16 +34,16 @@ public class OrdersController {
 
     @GetMapping("/{id}")
     public Mono<String> getOrder(@PathVariable Long id,
-                           @RequestParam(value = "newOrder", required = false, defaultValue = "false") boolean newOrder,
-                           Model model) {
+                                 @RequestParam(value = "newOrder", required = false, defaultValue = "false") boolean newOrder,
+                                 @AuthenticationPrincipal User currentUser,
+                                 Model model) {
 
-        return ordersService.getOrder(id)
+        return ordersService.getOrder(id, currentUser.getId())
                 .flatMap(orderDto -> {
                     model.addAttribute("order", orderDto);
                     model.addAttribute("newOrder", newOrder);
                     return Mono.just("order");
                 });
-
-
     }
+
 }

@@ -12,6 +12,8 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizedClientRepository;
 import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -39,6 +41,12 @@ public class AddItemIntegrationTest {
 
     @MockBean
     private ProductRepository productRepository;
+
+    @MockBean
+    private ReactiveClientRegistrationRepository clientRegistrationRepository;
+
+    @MockBean
+    private ServerOAuth2AuthorizedClientRepository authorizedClientRepository;
 
     @TempDir
     Path tempDir;
